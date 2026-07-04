@@ -74,7 +74,11 @@ default:
 
 HTTPステータスの対応付けやヘルスチェックまで含む完全なアップロードエンドポイントは
 [examples/httpupload](examples/httpupload/main.go)、CLIスキャナは
-[examples/basicscan](examples/basicscan/main.go) にあります。
+[examples/basicscan](examples/basicscan/main.go) にあります。利用側テストでの
+クライアントのモック方法(利用側で定義するinterface・fail-closedなモック規則)は
+[examples/mockscan](examples/mockscan/mockscan.go) を参照してください。本ライブラリは
+意図的にスキャナinterfaceを公開していません(
+[ADR-0004](docs/adr/0004-no-exported-scanner-interface.md) 参照)。
 
 ## API概要
 

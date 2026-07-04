@@ -23,6 +23,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 - `make format`: gofumpt + gci formatting via `golangci-lint fmt`.
 - Dependabot configuration (gomod, GitHub Actions, compose images).
+- `examples/mockscan`: a compiled, tested example of mocking the client in
+  consumer tests (consumer-defined interface idiom, fail-closed mock
+  rules), plus ADR-0004 recording the decision not to export a scanner
+  interface.
 - Development harness for human and AI contributors: the AGENTS.md
   contract (invariants, Definition of Done, design gate), CONTRIBUTING.md,
   an ADR template plus backfilled ADRs (0002 fail-closed error model,
