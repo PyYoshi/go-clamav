@@ -93,26 +93,51 @@ func (c *Client) ScanBytes(ctx context.Context, data []byte) (ScanResult, error)
 // and reintroduce time-of-check/time-of-use concerns).
 //
 // Files larger than the client-side limit fail with ErrSizeLimitExceeded
-// before any connection is made. Only regular files are accepted. See Scan
-// for the fail-closed contract.
+// before any connection is made. Only regular files are accepted; the type
+// is checked before opening (so a FIFO path cannot block the open) and
+// re-checked race-free on the open descriptor. The file is opened only
+// after a concurrency slot is acquired, so queued scans do not accumulate
+// open descriptors. See Scan for the fail-closed contract.
 func (c *Client) ScanFile(ctx context.Context, path string) (ScanResult, error) {
+	// Pre-open check: os.Open blocks on FIFOs, so reject non-regular
+	// paths before touching them. This is a convenience check; the
+	// authoritative one is the fstat below.
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ScanResult{}, fmt.Errorf("clamav: stat scan target: %w", err)
+	}
+	if err := checkScanTarget(c.cfg.maxStreamSize, path, fi); err != nil {
+		return ScanResult{}, err
+	}
+	if err := c.acquireScanSlot(ctx); err != nil {
+		return ScanResult{}, err
+	}
+	defer c.releaseScanSlot()
 	f, err := os.Open(path)
 	if err != nil {
 		return ScanResult{}, fmt.Errorf("clamav: opening scan target: %w", err)
 	}
 	defer f.Close()
-	fi, err := f.Stat()
+	// Race-free re-check on the descriptor actually being streamed.
+	fi, err = f.Stat()
 	if err != nil {
 		return ScanResult{}, fmt.Errorf("clamav: stat scan target: %w", err)
 	}
+	if err := checkScanTarget(c.cfg.maxStreamSize, path, fi); err != nil {
+		return ScanResult{}, err
+	}
+	return c.scanStream(ctx, f)
+}
+
+func checkScanTarget(maxStreamSize int64, path string, fi os.FileInfo) error {
 	if !fi.Mode().IsRegular() {
-		return ScanResult{}, fmt.Errorf("clamav: scan target %s is not a regular file (mode %v)", path, fi.Mode())
+		return fmt.Errorf("clamav: scan target %s is not a regular file (mode %v)", path, fi.Mode())
 	}
-	if c.cfg.maxStreamSize != NoSizeLimit && fi.Size() > c.cfg.maxStreamSize {
-		return ScanResult{}, fmt.Errorf("%w: file is %d bytes, client-side limit is %d (WithMaxStreamSize)",
-			ErrSizeLimitExceeded, fi.Size(), c.cfg.maxStreamSize)
+	if maxStreamSize != NoSizeLimit && fi.Size() > maxStreamSize {
+		return fmt.Errorf("%w: file is %d bytes, client-side limit is %d (WithMaxStreamSize)",
+			ErrSizeLimitExceeded, fi.Size(), maxStreamSize)
 	}
-	return c.Scan(ctx, f)
+	return nil
 }
 
 // acquireScanSlot blocks until a concurrency slot is free or ctx is done.
@@ -270,6 +295,9 @@ func wrapReadErr(ctx context.Context, command string, err error) error {
 	}
 	if errors.Is(err, proto.ErrResponseTooLarge) {
 		return &ProtocolError{Command: command, Response: "(reply exceeds read limit)"}
+	}
+	if errors.Is(err, proto.ErrMalformedReply) {
+		return &ProtocolError{Command: command, Response: "(multi-line reply)"}
 	}
 	return &ConnectionError{Op: "read", Err: err}
 }

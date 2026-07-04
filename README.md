@@ -59,7 +59,7 @@ if err != nil {
     log.Fatal(err)
 }
 
-ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 defer cancel()
 
 result, err := client.Scan(ctx, uploadedFile)

@@ -2,6 +2,7 @@ package clamav
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -75,6 +76,11 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 			return nil, fmt.Errorf("clamav: dial: %w", ctxErr)
 		}
 		return nil, &ConnectionError{Op: "dial", Err: err}
+	}
+	if conn == nil {
+		// Guard against a misbehaving custom DialFunc: a security control
+		// must fail with an error, not a nil-pointer panic.
+		return nil, &ConnectionError{Op: "dial", Err: errors.New("dial function returned a nil connection")}
 	}
 	return conn, nil
 }

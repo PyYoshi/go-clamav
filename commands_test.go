@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PyYoshi/go-clamav/internal/clamdtest"
 )
@@ -91,6 +92,49 @@ func TestReloadUnexpectedReply(t *testing.T) {
 	fake.SetHandler(clamdtest.RespondWith("NOPE\x00"))
 	c := newClient(t, fake.Addr)
 	err := c.Reload(context.Background())
+	var protoErr *ProtocolError
+	if !errors.As(err, &protoErr) {
+		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
+	}
+}
+
+func TestReloadErrorReply(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	fake.SetHandler(clamdtest.RespondWith("reload failed ERROR\x00"))
+	c := newClient(t, fake.Addr)
+	err := c.Reload(context.Background())
+	var clamdErr *ClamdError
+	if !errors.As(err, &clamdErr) {
+		t.Fatalf("error = %T(%v), want *ClamdError", err, err)
+	}
+}
+
+func TestPingContextCancel(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	fake.SetHandler(func(clamdtest.Request) clamdtest.Response {
+		return clamdtest.Response{Hang: true}
+	})
+	c := newClient(t, fake.Addr)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	err := c.Ping(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled in chain", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("cancellation took %v to unblock Ping", elapsed)
+	}
+}
+
+func TestPingMultilineReply(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	fake.SetHandler(clamdtest.RespondWith("PONG\ngarbage\x00"))
+	c := newClient(t, fake.Addr)
+	err := c.Ping(context.Background())
 	var protoErr *ProtocolError
 	if !errors.As(err, &protoErr) {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)

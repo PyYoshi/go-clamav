@@ -38,11 +38,15 @@ Design properties relied on:
 
 - **Fail-closed:** every failure path returns the zero `ScanResult`
   (`VerdictUnknown`); unknown replies are `ProtocolError`s, never verdicts.
-  `VerdictClean` is produced only by an exact `OK` reply.
+  `VerdictClean` is produced only by the OK reply forms INSTREAM actually
+  emits: a bare `OK`, or `<prefix>: OK` where the prefix contains "stream".
 - **Bounded resources:** reply reads are capped (4 KiB line / 1 MiB block),
-  each read/write carries a deadline, streams are size-limited client-side
-  (default 25 MiB) *before* bytes are sent, and a partial stream is never
-  terminated as if complete.
+  each read/write carries a no-progress deadline, streams are size-limited
+  client-side (default 25 MiB) *before* bytes are sent, and a partial
+  stream is never terminated as if complete. The per-operation deadline
+  bounds stalls, not totals: a server dripping one byte per interval can
+  stretch a reply read to (reply cap × I/O timeout), so callers must bound
+  total scan time with a context deadline, as every example does.
 - **No content exposure:** scanned bytes are never logged, stored, or
   embedded in error messages; errors carry classification and metadata only.
 - **Protocol hygiene:** clamd is a hard trust dependency, so the protocol

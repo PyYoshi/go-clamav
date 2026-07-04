@@ -24,6 +24,9 @@ func TestReadLine(t *testing.T) {
 		{"EOF no data", "", "", io.EOF},
 		{"empty line NUL", "\x00", "", nil},
 		{"stops at first terminator", "stream: OK\x00garbage", "stream: OK", nil},
+		{"trailing newline before NUL tolerated", "PONG\n\x00", "PONG", nil},
+		{"embedded newline rejected", "stream: OK\nEvil FOUND\x00", "", ErrMalformedReply},
+		{"embedded CR rejected", "stream: OK\rjunk\x00", "", ErrMalformedReply},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

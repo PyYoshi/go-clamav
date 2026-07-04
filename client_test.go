@@ -421,6 +421,56 @@ func TestScanContextDeadlineDuringWrite(t *testing.T) {
 	}
 }
 
+// TestScanMultilineReply guards the strict single-line rule: a reply whose
+// first line looks clean but that smuggles more content after a newline
+// must be a protocol error, never a verdict.
+func TestScanMultilineReply(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	fake.SetHandler(clamdtest.RespondWith("stream: OK\nEvil FOUND\x00"))
+	c := newClient(t, fake.Addr)
+	res, err := c.Scan(context.Background(), strings.NewReader("x"))
+	assertFailClosed(t, res, err)
+	var protoErr *ProtocolError
+	if !errors.As(err, &protoErr) {
+		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
+	}
+}
+
+func TestScanDialTimeout(t *testing.T) {
+	c := newClient(t, "tcp://127.0.0.1:1",
+		WithDialTimeout(100*time.Millisecond),
+		WithDialFunc(func(ctx context.Context, network, addr string) (net.Conn, error) {
+			<-ctx.Done() // never connects; honors the dial-timeout sub-context
+			return nil, ctx.Err()
+		}))
+	start := time.Now()
+	res, err := c.Scan(context.Background(), strings.NewReader("x"))
+	assertFailClosed(t, res, err)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("dial timeout took %v to fire", elapsed)
+	}
+	var connErr *ConnectionError
+	if !errors.As(err, &connErr) || connErr.Op != "dial" {
+		t.Fatalf("error = %T(%v), want *ConnectionError{Op: dial}", err, err)
+	}
+	if !IsRetryable(err) {
+		t.Error("dial timeout should be retryable")
+	}
+}
+
+func TestScanNilConnFromDialFunc(t *testing.T) {
+	c := newClient(t, "tcp://127.0.0.1:1",
+		WithDialFunc(func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return nil, nil // misbehaving dialer: must error, not panic
+		}))
+	res, err := c.Scan(context.Background(), strings.NewReader("x"))
+	assertFailClosed(t, res, err)
+	var connErr *ConnectionError
+	if !errors.As(err, &connErr) {
+		t.Fatalf("error = %T(%v), want *ConnectionError", err, err)
+	}
+}
+
 func TestScanDialFailure(t *testing.T) {
 	c := newClient(t, "unix:///nonexistent/clamd.sock")
 	res, err := c.Scan(context.Background(), strings.NewReader("x"))

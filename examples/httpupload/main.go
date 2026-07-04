@@ -83,6 +83,11 @@ func uploadHandler(scanner *clamav.Client, logger *slog.Logger) http.HandlerFunc
 		r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+(1<<20))
 		file, header, err := r.FormFile("file")
 		if err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				http.Error(w, "file too large to scan", http.StatusRequestEntityTooLarge)
+				return
+			}
 			http.Error(w, "missing multipart field 'file'", http.StatusBadRequest)
 			return
 		}

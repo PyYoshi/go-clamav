@@ -20,29 +20,45 @@ const (
 // read limit. Treated as a protocol violation (fail-closed).
 var ErrResponseTooLarge = errors.New("response exceeds read limit")
 
-// ReadLine reads a single response line terminated by NUL (z-format) or,
-// leniently, by '\n', up to max bytes of content. Trailing '\r' and '\n'
-// are trimmed. EOF after at least one byte returns the data read so far
-// (clamd may close the connection right after replying); EOF with no data
-// is returned as io.EOF so callers can classify "closed without response".
+// ErrMalformedReply indicates a multi-line reply to a command that must
+// produce a single line. All commands are sent in z form, so a reply is one
+// NUL-terminated unit; content with embedded newlines cannot be classified
+// safely (a hostile "stream: <sig> FOUND\nstream: OK" must not be judged by
+// either single line) and is treated as a protocol violation.
+var ErrMalformedReply = errors.New("multi-line reply to a single-line command")
+
+// ReadLine reads a single-line response terminated by NUL (z-format), up to
+// max bytes of content. Trailing '\r' and '\n' are trimmed, but an embedded
+// newline fails with ErrMalformedReply. EOF after at least one byte returns
+// the data read so far (clamd may close the connection right after
+// replying); EOF with no data is returned as io.EOF so callers can classify
+// "closed without response".
 func ReadLine(br *bufio.Reader, max int) (string, error) {
 	buf := make([]byte, 0, 64)
 	for {
 		b, err := br.ReadByte()
 		if err != nil {
 			if err == io.EOF && len(buf) > 0 {
-				return trimEOL(string(buf)), nil
+				return finishLine(string(buf))
 			}
 			return "", err
 		}
-		if b == 0 || b == '\n' {
-			return trimEOL(string(buf)), nil
+		if b == 0 {
+			return finishLine(string(buf))
 		}
 		if len(buf) >= max {
 			return "", ErrResponseTooLarge
 		}
 		buf = append(buf, b)
 	}
+}
+
+func finishLine(s string) (string, error) {
+	s = trimEOL(s)
+	if strings.ContainsAny(s, "\r\n") {
+		return "", ErrMalformedReply
+	}
+	return s, nil
 }
 
 // ReadBlock reads a multi-line response (STATS) terminated by NUL or EOF,
