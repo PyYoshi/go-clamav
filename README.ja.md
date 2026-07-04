@@ -42,9 +42,9 @@ English version: [README.md](README.md)
 go get github.com/PyYoshi/go-clamav
 ```
 
-Go 1.26以上と、稼働中のclamdが必要です。推奨デプロイ対象は1.4 LTS系
-(2027-08-15までサポート)で、CIでは1.4 LTSと現行の通常リリース(1.5)を
-検証しています。
+Go 1.26以上と、稼働中のclamdが必要です。CIでは1.4 LTS系(2027-08-15まで
+サポート)と現行の通常リリース(1.5)を検証しており、Dockerテスト環境の
+デフォルトは1.5です。
 
 ## クイックスタート
 

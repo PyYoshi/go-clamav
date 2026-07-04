@@ -45,9 +45,9 @@ found".
 go get github.com/PyYoshi/go-clamav
 ```
 
-Requires Go 1.26+ and a running clamd. The recommended deployment target
-is the 1.4 LTS line (supported until 2027-08-15); CI covers 1.4 LTS and
-the current regular release (1.5).
+Requires Go 1.26+ and a running clamd. CI covers the 1.4 LTS line
+(supported until 2027-08-15) and the current regular release (1.5); the
+dockerized test environment defaults to 1.5.
 
 ## Quick start
 
