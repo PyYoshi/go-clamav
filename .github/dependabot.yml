@@ -1,0 +1,22 @@
+# Dependabot: weekly checks for the Go module (currently stdlib-only, but
+# this also covers future additions), GitHub Actions pins, and the ClamAV
+# image references in the compose file.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Note: the clamd image is referenced as ${CLAMAV_IMAGE:-clamav/clamav:1.4}.
+  # If Dependabot cannot parse the env-default form, remove this entry —
+  # ClamAV version bumps are then handled manually (see docs/operations.md).
+  - package-ecosystem: docker-compose
+    directory: "/docker"
+    schedule:
+      interval: weekly

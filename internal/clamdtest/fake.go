@@ -6,6 +6,7 @@ package clamdtest
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -73,6 +74,7 @@ func New(t *testing.T, network string) *Fake {
 	t.Helper()
 	var ln net.Listener
 	var addr string
+	var lc net.ListenConfig
 	switch network {
 	case "unix":
 		// A dedicated short temp dir keeps the socket path well under the
@@ -81,16 +83,16 @@ func New(t *testing.T, network string) *Fake {
 		if err != nil {
 			t.Fatalf("clamdtest: creating socket dir: %v", err)
 		}
-		t.Cleanup(func() { os.RemoveAll(dir) })
+		t.Cleanup(func() { _ = os.RemoveAll(dir) })
 		sock := filepath.Join(dir, "clamd.sock")
-		ln, err = net.Listen("unix", sock)
+		ln, err = lc.Listen(context.Background(), "unix", sock)
 		if err != nil {
 			t.Fatalf("clamdtest: listening on %s: %v", sock, err)
 		}
 		addr = "unix://" + sock
 	case "tcp":
 		var err error
-		ln, err = net.Listen("tcp", "127.0.0.1:0")
+		ln, err = lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("clamdtest: listening on tcp: %v", err)
 		}
@@ -128,7 +130,7 @@ func (f *Fake) SetStreamLimit(n int64) { f.streamLimit.Store(n) }
 func (f *Fake) Close() {
 	f.closeOnce.Do(func() {
 		close(f.done)
-		f.ln.Close()
+		_ = f.ln.Close()
 		f.wg.Wait()
 	})
 }
@@ -156,7 +158,7 @@ func (f *Fake) serve() {
 }
 
 func (f *Fake) handleConn(conn net.Conn) {
-	conn.SetDeadline(time.Now().Add(connSafetyDeadline))
+	_ = conn.SetDeadline(time.Now().Add(connSafetyDeadline))
 	br := bufio.NewReader(conn)
 	cmd, err := readCommand(br)
 	if err != nil {
@@ -183,7 +185,7 @@ func (f *Fake) handleConn(conn net.Conn) {
 		}
 	}
 	if len(resp.Data) > 0 {
-		conn.Write(resp.Data)
+		_, _ = conn.Write(resp.Data)
 	}
 }
 
@@ -235,7 +237,7 @@ func (f *Fake) readChunks(conn net.Conn, br *bufio.Reader) (body []byte, ok bool
 			// Mimic clamd: reply, then close (via the caller's defer)
 			// without reading the rest of the stream. The client's next
 			// write fails and it must recover this reply.
-			conn.Write([]byte("INSTREAM size limit exceeded. ERROR\x00"))
+			_, _ = conn.Write([]byte("INSTREAM size limit exceeded. ERROR\x00"))
 			return nil, false
 		}
 	}

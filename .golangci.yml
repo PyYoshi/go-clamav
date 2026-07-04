@@ -1,0 +1,71 @@
+# golangci-lint v2 configuration.
+#
+# This library is a security control, so the linter set leans hard on
+# security and correctness: gosec with every rule enabled, strict errcheck
+# (type assertions and blank assignments included), Trojan-Source detection
+# (bidichk), error-wrapping correctness, and switch exhaustiveness for the
+# verdict enums. Deliberate exceptions in code carry an inline nolint with
+# a justification.
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bidichk # Unicode bidi control characters (Trojan Source)
+    - contextcheck # non-inherited context usage
+    - durationcheck # suspicious time.Duration multiplication
+    - errorlint # errors.Is/As instead of == / type asserts
+    - exhaustive # switch exhaustiveness (Verdict, Outcome)
+    - forcetypeassert # unchecked type assertions
+    - gocritic # diagnostics beyond govet
+    - gosec # security rules (all enabled)
+    - makezero # append to non-zero-length make() slices
+    - misspell
+    - nilerr # returning nil despite non-nil err
+    - noctx # I/O without context
+    - reassign # reassigning package-level variables
+    - unconvert
+    - unparam
+  settings:
+    errcheck:
+      check-type-assertions: true
+      # Teardown Close errors are non-actionable here: by the time a
+      # descriptor is closed the verdict has already been read (or the
+      # operation has already failed). Everything else must be checked
+      # or explicitly discarded with `_ =`.
+      exclude-functions:
+        - (net.Conn).Close
+        - (*os.File).Close
+        - (net.Listener).Close
+        - (mime/multipart.File).Close
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+    gosec:
+      severity: low
+      confidence: low
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # layout micro-optimization, pure noise here
+  exclusions:
+    rules:
+      # Test-only relaxations: tests intentionally ignore Close/Write
+      # errors in teardown paths and use fixed loopback addresses.
+      - path: _test\.go
+        linters:
+          - gosec
+          - noctx
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/PyYoshi/go-clamav)

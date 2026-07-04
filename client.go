@@ -106,14 +106,14 @@ func (c *Client) ScanFile(ctx context.Context, path string) (ScanResult, error) 
 	if err != nil {
 		return ScanResult{}, fmt.Errorf("clamav: stat scan target: %w", err)
 	}
-	if err := checkScanTarget(c.cfg.maxStreamSize, path, fi); err != nil {
-		return ScanResult{}, err
+	if terr := checkScanTarget(c.cfg.maxStreamSize, path, fi); terr != nil {
+		return ScanResult{}, terr
 	}
-	if err := c.acquireScanSlot(ctx); err != nil {
-		return ScanResult{}, err
+	if serr := c.acquireScanSlot(ctx); serr != nil {
+		return ScanResult{}, serr
 	}
 	defer c.releaseScanSlot()
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- opening the caller-designated scan target is this function's contract
 	if err != nil {
 		return ScanResult{}, fmt.Errorf("clamav: opening scan target: %w", err)
 	}
@@ -171,14 +171,14 @@ func (c *Client) scanStream(ctx context.Context, r io.Reader) (ScanResult, error
 		return ScanResult{}, err
 	}
 	defer conn.Close()
-	stop := context.AfterFunc(ctx, func() { conn.SetDeadline(abortDeadline) })
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(abortDeadline) })
 	defer stop()
 
 	dc := &deadlineConn{conn: conn, ctx: ctx, ioTimeout: c.cfg.ioTimeout}
 	br := bufio.NewReader(dc)
 
-	if _, err := dc.Write(proto.EncodeCommand("INSTREAM")); err != nil {
-		return ScanResult{}, wrapIOErr(ctx, "write", err)
+	if _, werr := dc.Write(proto.EncodeCommand("INSTREAM")); werr != nil {
+		return ScanResult{}, wrapWriteErr(ctx, werr)
 	}
 	if _, streamErr := proto.StreamAll(dc, r, c.cfg.chunkSize, c.cfg.maxStreamSize); streamErr != nil {
 		return c.recoverStreamError(ctx, dc, br, streamErr)
@@ -228,13 +228,17 @@ func (c *Client) recoverStreamError(ctx context.Context, dc *deadlineConn, br *b
 			// "OK" for a stream we never finished sending is inconsistent;
 			// trusting it would be fail-open.
 			return ScanResult{}, &ProtocolError{Command: "INSTREAM", Response: line}
+		case proto.OutcomeUnknown:
+			// Unclassifiable reply: fall through to the transport error
+			// below — the original write failure explains more than the
+			// garbage reply does.
 		}
 	}
 	var sinkErr *proto.SinkError
 	if errors.As(streamErr, &sinkErr) {
-		return ScanResult{}, wrapIOErr(ctx, "write", sinkErr.Err)
+		return ScanResult{}, wrapWriteErr(ctx, sinkErr.Err)
 	}
-	return ScanResult{}, wrapIOErr(ctx, "write", streamErr)
+	return ScanResult{}, wrapWriteErr(ctx, streamErr)
 }
 
 // resultFromLine maps a parsed verdict line to the public API. Unknown
@@ -277,13 +281,14 @@ func ctxError(ctx context.Context) error {
 	return nil
 }
 
-// wrapIOErr maps a transport failure to the public error shape, giving
-// context errors priority so cancellations are reported as such.
-func wrapIOErr(ctx context.Context, op string, err error) error {
+// wrapWriteErr maps a write-side transport failure to the public error
+// shape, giving context errors priority so cancellations are reported as
+// such.
+func wrapWriteErr(ctx context.Context, err error) error {
 	if ctxErr := ctxError(ctx); ctxErr != nil {
-		return fmt.Errorf("clamav: %s: %w", op, ctxErr)
+		return fmt.Errorf("clamav: write: %w", ctxErr)
 	}
-	return &ConnectionError{Op: op, Err: err}
+	return &ConnectionError{Op: "write", Err: err}
 }
 
 // wrapReadErr maps reply-read failures. An oversized reply is a protocol

@@ -14,7 +14,10 @@
 
 services:
   clamd:
-    # Overridable so CI can matrix-test multiple clamd versions.
+    # Default is the 1.4 LTS line (EOL 2027-08-15). 1.5 is a regular
+    # release that will not be promoted to LTS (ClamAV fixes the LTS
+    # designation at release time), so it is exercised via the CI matrix
+    # instead. Overridable so CI can matrix-test multiple clamd versions.
     image: ${CLAMAV_IMAGE:-clamav/clamav:1.4}
     entrypoint: ["/usr/sbin/clamd", "--foreground", "--config-file=/etc/clamav/clamd.conf"]
     ports:

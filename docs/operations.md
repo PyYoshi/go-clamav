@@ -127,6 +127,13 @@ your wrapping code to the same standard. Signature names (e.g.
 
 The reply parser is prefix-agnostic and suffix-driven, which covers the
 reply-format drift observed across clamd versions ("stream:" vs older
-"instream (local):"). CI pins clamd 1.0 (LTS) and 1.4 as required checks
-and tracks `clamav/clamav:latest` in a scheduled canary job, so upstream
-protocol drift surfaces as signal rather than sudden breakage.
+"instream (local):"). CI pins clamd 1.4 (LTS, supported until 2027-08-15)
+and 1.5 (current regular release) as required checks and tracks
+`clamav/clamav:latest` in a scheduled canary job, so upstream protocol
+drift surfaces as signal rather than sudden breakage.
+
+Version policy: prefer the LTS line in production — ClamAV designates LTS
+versions at release time (roughly every two years; regular releases like
+1.5 are never promoted afterwards), and non-LTS lines historically reach
+EOL a few months after the next feature release. When the next LTS ships,
+bump the compose default and the CI matrix together.

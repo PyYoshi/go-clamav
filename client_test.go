@@ -108,9 +108,9 @@ func TestScanInfected(t *testing.T) {
 
 func TestScanInfectedVariants(t *testing.T) {
 	tests := []struct {
-		name     string
-		reply    string
-		wantSig  string
+		name    string
+		reply   string
+		wantSig string
 	}{
 		{"multi-word signature", "stream: Some sig with spaces FOUND\x00", "Some sig with spaces"},
 		{"legacy prefix", "instream (local): Eicar-Signature FOUND\x00", "Eicar-Signature"},

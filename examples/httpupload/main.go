@@ -118,7 +118,7 @@ func uploadHandler(scanner *clamav.Client, logger *slog.Logger) http.HandlerFunc
 			// Clean: only now may the file be moved to permanent storage.
 			logger.Info("upload accepted", "file", header.Filename, "bytes", header.Size)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("accepted\n"))
+			_, _ = w.Write([]byte("accepted\n"))
 
 		default:
 			// Unreachable under the library contract (a nil error implies

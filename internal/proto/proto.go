@@ -87,6 +87,7 @@ func StreamAll(w io.Writer, r io.Reader, chunkSize int, maxBytes int64) (int64, 
 			if maxBytes >= 0 && total+int64(n) > maxBytes {
 				return total, ErrSizeLimitExceeded
 			}
+			// #nosec G115 -- n <= chunkSize <= MaxChunkSize (16 MiB), cannot overflow uint32
 			binary.BigEndian.PutUint32(buf[:chunkHeaderSize], uint32(n))
 			if wn, werr := w.Write(buf[:chunkHeaderSize+n]); werr != nil {
 				return total, &SinkError{Err: werr}

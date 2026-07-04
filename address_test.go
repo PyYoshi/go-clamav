@@ -19,13 +19,13 @@ func TestParseAddress(t *testing.T) {
 		{"unix://", "", "", true},
 		{"unix://relative/path.sock", "", "", true},
 		{"tcp://", "", "", true},
-		{"tcp://127.0.0.1", "", "", true},         // missing port
-		{"tcp://:3310", "", "", true},             // missing host
-		{"/run/clamav/clamd.sock", "", "", true},  // scheme-less path
-		{"127.0.0.1:3310", "", "", true},          // scheme-less host:port
-		{"udp://127.0.0.1:3310", "", "", true},    // unsupported scheme
-		{"http://127.0.0.1:3310", "", "", true},   // unsupported scheme
-		{"UNIX:///run/clamd.sock", "", "", true},  // schemes are case-sensitive
+		{"tcp://127.0.0.1", "", "", true},        // missing port
+		{"tcp://:3310", "", "", true},            // missing host
+		{"/run/clamav/clamd.sock", "", "", true}, // scheme-less path
+		{"127.0.0.1:3310", "", "", true},         // scheme-less host:port
+		{"udp://127.0.0.1:3310", "", "", true},   // unsupported scheme
+		{"http://127.0.0.1:3310", "", "", true},  // unsupported scheme
+		{"UNIX:///run/clamd.sock", "", "", true}, // schemes are case-sensitive
 	}
 	for _, tt := range tests {
 		t.Run(tt.addr, func(t *testing.T) {

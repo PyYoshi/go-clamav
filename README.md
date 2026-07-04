@@ -45,8 +45,9 @@ found".
 go get github.com/PyYoshi/go-clamav
 ```
 
-Requires Go 1.25+ and a running clamd (any maintained version; CI covers
-1.0 LTS and 1.4).
+Requires Go 1.26+ and a running clamd. The recommended deployment target
+is the 1.4 LTS line (supported until 2027-08-15); CI covers 1.4 LTS and
+the current regular release (1.5).
 
 ## Quick start
 
@@ -149,6 +150,8 @@ freshness, overload behavior) is covered in
 make test          # unit tests + race detector (no Docker needed)
 make integration   # starts dockerized clamd, runs integration suite
 make fuzz          # short fuzzing pass over the reply parser
+make lint          # golangci-lint (security-heavy config) + govulncheck
+make format        # gofumpt + gci formatting (via golangci-lint fmt)
 ```
 
 The integration environment (see [docker/](docker/)) starts the official

@@ -38,7 +38,7 @@ func (d *deadlineConn) refresh() error {
 	// between the check above and SetDeadline, the watcher's abort deadline
 	// may have just been overwritten — reinstate it.
 	if err := d.ctx.Err(); err != nil {
-		d.conn.SetDeadline(abortDeadline)
+		_ = d.conn.SetDeadline(abortDeadline)
 		return err
 	}
 	return nil

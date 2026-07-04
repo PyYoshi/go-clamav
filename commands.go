@@ -15,14 +15,14 @@ func (c *Client) command(ctx context.Context, name string, block bool) (string, 
 		return "", err
 	}
 	defer conn.Close()
-	stop := context.AfterFunc(ctx, func() { conn.SetDeadline(abortDeadline) })
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(abortDeadline) })
 	defer stop()
 
 	dc := &deadlineConn{conn: conn, ctx: ctx, ioTimeout: c.cfg.ioTimeout}
 	br := bufio.NewReader(dc)
 
-	if _, err := dc.Write(proto.EncodeCommand(name)); err != nil {
-		return "", wrapIOErr(ctx, "write", err)
+	if _, werr := dc.Write(proto.EncodeCommand(name)); werr != nil {
+		return "", wrapWriteErr(ctx, werr)
 	}
 	var reply string
 	var rerr error

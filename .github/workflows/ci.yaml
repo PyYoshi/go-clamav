@@ -34,23 +34,25 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-      - name: staticcheck
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
-  # Required: pinned ClamAV versions. 1.0 is the LTS floor, 1.4 the primary
-  # target. `latest` is intentionally NOT here — see integration-canary.
+  # Required: pinned ClamAV versions. 1.4 is the LTS default (EOL
+  # 2027-08-15), 1.5 the current regular release. 1.0 was dropped at its
+  # EOL (2025-11-28). `latest` is intentionally NOT here — see
+  # integration-canary.
   integration:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        clamav: ["1.0", "1.4"]
+        clamav: ["1.4", "1.5"]
     env:
       CLAMAV_IMAGE: clamav/clamav:${{ matrix.clamav }}
     steps:

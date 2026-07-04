@@ -6,6 +6,24 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Require Go 1.26.4+ as the toolchain floor (includes current stdlib
+  security fixes; older local toolchains fetch it automatically via
+  GOTOOLCHAIN=auto).
+- CI now tests against ClamAV 1.4 LTS (the recommended default, supported
+  until 2027-08-15) and 1.5 (current regular release). ClamAV 1.0 was
+  dropped from the matrix at its EOL (2025-11-28).
+- `make lint` now runs golangci-lint v2 with a security-heavy
+  configuration (gosec with all rules, bidichk, strict errcheck,
+  exhaustive verdict switches, and more) plus govulncheck; the standalone
+  staticcheck invocation was removed (bundled in golangci-lint).
+
+### Added
+
+- `make format`: gofumpt + gci formatting via `golangci-lint fmt`.
+- Dependabot configuration (gomod, GitHub Actions, compose images).
+
 ## [0.1.0] - 2026-07-04
 
 ### Added
