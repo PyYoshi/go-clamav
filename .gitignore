@@ -18,6 +18,12 @@
 # OS
 .DS_Store
 
-# Session / tooling state
+# Session / tooling state; the committed Claude Code harness
+# (settings, hooks, skills) is re-included explicitly.
 .omc/
-.claude/
+/.claude/*
+!/.claude/settings.json
+!/.claude/hooks
+!/.claude/hooks/**
+!/.claude/skills
+!/.claude/skills/**

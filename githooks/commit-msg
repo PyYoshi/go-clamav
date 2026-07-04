@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Repository policy: no Co-Authored-By trailers (AI attribution is not
+# recorded in commit history). Enable with: make setup
+set -eu
+
+if grep -qiE '^[[:space:]]*Co-Authored-By:' "$1"; then
+  echo "commit-msg: Co-Authored-By trailers are not allowed in this repository." >&2
+  echo "commit-msg: remove the trailer and commit again." >&2
+  exit 1
+fi

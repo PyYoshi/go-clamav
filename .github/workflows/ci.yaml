@@ -30,6 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: EICAR plaintext guard
+        run: bash ./scripts/check-eicar.sh tracked
+      - name: Zero-dependency policy (ADR-0003)
+        run: |
+          if grep -Eq '^require' go.mod; then
+            echo "go.mod gained a require directive; the module is standard-library only (ADR-0003)." >&2
+            exit 1
+          fi
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
