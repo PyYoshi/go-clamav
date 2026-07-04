@@ -1,0 +1,94 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+#
+# CodeRabbit configuration for go-clamav.
+#
+# This library is a fail-closed security control; the path instructions
+# below encode its review contract so automated reviews look for the same
+# invariants the human reviews enforce.
+
+language: "ja-JP"
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+
+  path_filters:
+    - "!docker/clamd/db/**" # hex-encoded EICAR signature database, not reviewable content
+    - "!docker/run/**" # runtime bind-mount directory (.gitkeep only)
+    - "!LICENSE"
+
+  path_instructions:
+    - path: "**/*.go"
+      instructions: |
+        このライブラリはfail-closedなセキュリティ制御です。以下の契約違反を最優先で指摘してください:
+        - err != nil のときにゼロ値以外の ScanResult が返り得る経路(ゼロ値 = VerdictUnknown が契約)
+        - 解釈できない clamd 応答が VerdictClean に分類され得る変更(fail-open化)
+        - 応答読み取り上限・I/Oデッドライン・クライアント側サイズ上限の緩和や削除
+        - 部分ストリームが完全なストリームとして clamd に提示され得る変更(終端チャンクの扱い)
+        加えて: 標準ライブラリ以外の依存追加(このライブラリは依存ゼロが方針)、context を無視した
+        ブロッキングI/O、goroutineリーク、エラーメッセージへのスキャン内容の混入を指摘してください。
+        godoc とコードコメントは英語で統一します。
+    - path: "go.mod"
+      instructions: |
+        このライブラリは依存ゼロ(標準ライブラリのみ)が方針です。
+        require の追加は重大な方針逸脱として指摘してください。
+    - path: "internal/proto/**"
+      instructions: |
+        clamd ワイヤプロトコル層です。応答パーサは接頭辞非依存・サフィックス駆動で、
+        分類優先順位は FOUND > ERROR > OK、未知の応答は必ず OutcomeUnknown にします。
+        この優先順位や未知応答の扱いを緩める変更(fail-open方向)は重大な欠陥として扱ってください。
+    - path: "internal/clamdtest/**"
+      instructions: |
+        テスト用フェイク clamd と EICAR ヘルパーの実体です。EICAR テスト文字列の完全形
+        (68バイト)をリポジトリに持ち込む変更は拒否してください(分割定数・hex 表記を維持。
+        チェックアウトが常駐AVに隔離される事故の防止)。
+    - path: "**/*_test.go"
+      instructions: |
+        タイミング依存で flaky になり得るテスト、-race で壊れる並行アクセスを指摘してください。
+        EICAR テスト文字列の完全形(68バイト)をリポジトリに持ち込む変更は拒否してください
+        (分割定数・hex 表記を維持。チェックアウトが常駐AVに隔離される事故の防止)。
+    - path: ".github/**"
+      instructions: |
+        GitHub Actions のバージョン固定と permissions の最小化を確認してください。
+        CI ジョブ名(unit / lint / integration (1.4) / integration (1.5))を変更する場合は
+        branch ruleset の必須ステータスチェック名との同期が必要である旨を指摘してください。
+    - path: "docker/**"
+      instructions: |
+        統合テスト専用の環境定義です。clamd.conf の制限値(StreamMaxLength 等)の変更が
+        integration_test.go の期待値と整合しているか確認してください。
+    - path: "README.md"
+      instructions: |
+        README.md(英語)と README.ja.md(日本語)は内容を同期させる方針です。
+        片方だけが変更されている場合は乖離として指摘してください。
+    - path: "README.ja.md"
+      instructions: |
+        README.ja.md(日本語)と README.md(英語)は内容を同期させる方針です。
+        片方だけが変更されている場合は乖離として指摘してください。
+
+  tools:
+    github-checks:
+      enabled: true
+      timeout_ms: 300000 # the ClamAV integration matrix takes a few minutes
+    golangci-lint:
+      enabled: true # uses this repository's .golangci.yml (security-heavy config)
+    gitleaks:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true # GitHub Actions security audit
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+
+chat:
+  auto_reply: true
