@@ -12,7 +12,8 @@
 #   check-eicar.sh tracked   # scan tracked files in the worktree (CI)
 #   check-eicar.sh stdin     # scan standard input (pre-push diffs, hooks)
 #
-# Exit codes: 0 = clean, 1 = EICAR found, 2 = usage error.
+# Exit codes: 0 = clean, 1 = EICAR found, 2 = usage or scan error.
+# A scan error never passes as clean (fail-closed).
 set -u
 
 EICAR_HEX="58354f2150254041505b345c505a58353428505e2937434329377d2445494341522d5354414e444152442d414e544956495255532d544553542d46494c452124482b482a"
@@ -30,17 +31,23 @@ fail() {
   exit 1
 }
 
+hits=""
+where=""
 case "${1:-}" in
 stdin)
-  if grep -qF -- "$pattern"; then
-    fail "in input"
-  fi
+  grep -qF -- "$pattern"
+  rc=$?
+  where="in input"
   ;;
 staged)
-  hits=$(git grep -lF --cached -e "$pattern" -- . 2>/dev/null) && fail "staged: ${hits//$'\n'/, }"
+  hits=$(git grep -lF --cached -e "$pattern" -- .)
+  rc=$?
+  where="staged: ${hits//$'\n'/, }"
   ;;
 tracked)
-  hits=$(git grep -lF -e "$pattern" -- . 2>/dev/null) && fail "tracked: ${hits//$'\n'/, }"
+  hits=$(git grep -lF -e "$pattern" -- .)
+  rc=$?
+  where="tracked: ${hits//$'\n'/, }"
   ;;
 *)
   echo "usage: $0 staged|tracked|stdin" >&2
@@ -48,4 +55,13 @@ tracked)
   ;;
 esac
 
-exit 0
+# grep/git grep: 0 = match, 1 = no match, anything else = the scan itself
+# failed. Only a clean "no match" may pass.
+case "$rc" in
+0) fail "$where" ;;
+1) exit 0 ;;
+*)
+  echo "check-eicar: scan failed (exit $rc); failing closed." >&2
+  exit 2
+  ;;
+esac

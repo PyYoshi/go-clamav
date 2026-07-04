@@ -22,13 +22,17 @@ while read -r _local_ref local_sha _remote_ref remote_sha || [ -n "${local_sha:-
     range=("$remote_sha..$local_sha")
   fi
 
-  if git log --format='%B' "${range[@]}" | grep -qiE '^[[:space:]]*Co-Authored-By:'; then
+  # Capture git log output first: under set -e a failing git log aborts the
+  # push (fail-closed) instead of feeding empty input to the scanners.
+  msgs=$(git log --format='%B' "${range[@]}")
+  if grep -qiE '^[[:space:]]*Co-Authored-By:' <<<"$msgs"; then
     echo "pre-push: an outgoing commit message contains a Co-Authored-By trailer." >&2
     echo "pre-push: rewrite the message (git commit --amend / git rebase) before pushing." >&2
     exit 1
   fi
 
-  git log -p --format= "${range[@]}" | "$top/scripts/check-eicar.sh" stdin
+  patches=$(git log -p --format= "${range[@]}")
+  printf '%s' "$patches" | "$top/scripts/check-eicar.sh" stdin
 done
 
 exit 0

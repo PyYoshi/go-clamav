@@ -12,7 +12,9 @@
 #   - gh pr merge --admin (bypasses required checks)
 #
 # Advisory layer: fail-open without jq; rulesets and CI are authoritative.
-set -u
+#
+# Kept bash 3.2 compatible (macOS /bin/bash): no ${var,,} lowercasing, and
+# no `set -u` — empty-array expansion trips it on bash < 4.4.
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "guard-bash: jq not found; command guard skipped (install jq, see make setup)." >&2
@@ -28,21 +30,28 @@ block() {
   exit 2
 }
 
+lc() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 on_main_branch() {
   [ "$(git symbolic-ref --short -q HEAD 2>/dev/null)" = "main" ]
 }
 
 check_git() {
-  local tokens=("$@") sub="" i=0 t seg="${*}"
+  local tokens=("$@") sub="" i=0 t kv seg="${*}"
 
   # Global options: `git -c key=val ...` can change signing/hook behavior
   # for a single invocation, and -C can point at another repository.
-  while [ $i -lt ${#tokens[@]} ]; do
+  while [ "$i" -lt "${#tokens[@]}" ]; do
     t=${tokens[$i]}
     case "$t" in
     -c | --config-env)
-      local kv=${tokens[$((i + 1))]:-}
-      case "${kv,,}" in
+      kv=""
+      if [ $((i + 1)) -lt "${#tokens[@]}" ]; then
+        kv=${tokens[$((i + 1))]}
+      fi
+      case "$(lc "$kv")" in
       commit.gpgsign=false | commit.gpgsign=0 | commit.gpgsign=no | commit.gpgsign=off)
         block "disabling commit signing (git -c commit.gpgsign=...)"
         ;;
@@ -54,7 +63,7 @@ check_git() {
       continue
       ;;
     -c*)
-      case "${t,,}" in
+      case "$(lc "$t")" in
       -ccommit.gpgsign=false | -ccommit.gpgsign=0 | -ccommit.gpgsign=no | -ccommit.gpgsign=off)
         block "disabling commit signing (git -c commit.gpgsign=...)"
         ;;
@@ -118,7 +127,7 @@ check_git() {
       *) nonopt+=("$t") ;;
       esac
     done
-    if [ ${#nonopt[@]} -le 1 ] && on_main_branch; then
+    if [ "${#nonopt[@]}" -le 1 ] && on_main_branch; then
       block "pushing while on main is not allowed; work on a feature branch"
     fi
     for t in "${nonopt[@]}"; do
@@ -129,7 +138,7 @@ check_git() {
     ;;
   config)
     if grep -qi 'commit\.gpgsign' <<<"$seg"; then
-      case "${seg,,}" in
+      case "$(lc "$seg")" in
       *false* | *" 0"* | *" no"* | *" off"*) block "disabling commit signing (commit.gpgsign)" ;;
       esac
     fi
@@ -148,16 +157,17 @@ check_gh() {
   fi
 }
 
-# Split compound commands on |, ;, & and backticks, then inspect each
+# Split compound commands on |, ;, &, backticks and parentheses (the latter
+# catch $(...) command substitutions and subshells), then inspect each
 # segment that invokes git or gh. Quoted separators over-split, which can
 # only cause a rare false block, never a false allow.
 while IFS= read -r seg; do
-  read -ra tok <<<"$seg" || true
-  [ ${#tok[@]} -eq 0 ] && continue
+  read -ra tok <<<"$seg"
+  [ "${#tok[@]}" -eq 0 ] && continue
   case "${tok[0]}" in
   git) check_git "${tok[@]:1}" ;;
   gh) check_gh "${tok[@]:1}" ;;
   esac
-done < <(printf '%s\n' "$cmd" | tr '|;&`' '\n')
+done < <(printf '%s\n' "$cmd" | tr '|;&`()' '\n')
 
 exit 0

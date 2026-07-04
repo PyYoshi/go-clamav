@@ -11,6 +11,9 @@
 #
 # stop_hook_active is set when a previous Stop block already continued the
 # turn — in that case allow stopping, so the agent is nudged exactly once.
+#
+# Kept bash 3.2 compatible (macOS /bin/bash): reasons are accumulated in a
+# string, not an array (empty-array expansion trips set -u on bash < 4.4).
 set -u
 
 root=${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}
@@ -22,7 +25,7 @@ if [ "$(jq -r '.stop_hook_active // false' 2>/dev/null)" = "true" ]; then
   exit 0
 fi
 
-reasons=()
+reasons=""
 
 # --- 1. Unverified Go changes -------------------------------------------
 go_changed=false
@@ -37,7 +40,8 @@ if [ "$go_changed" = "true" ]; then
   current=$(./scripts/go-state-hash.sh 2>/dev/null || echo unknown)
   recorded=$(cat "$(git rev-parse --git-dir)/harness/verified" 2>/dev/null || echo none)
   if [ "$current" != "$recorded" ]; then
-    reasons+=("Go sources changed but 'make verify' has not passed against the current state. Run 'make format && make verify' (and 'make integration' if client/conn/commands/proto/docker changed), fix anything it reports, then finish.")
+    reasons="${reasons}Go sources changed but 'make verify' has not passed against the current state. Run 'make format && make verify' (and 'make integration' if client/conn/commands/proto/docker changed), fix anything it reports, then finish.
+"
   fi
 fi
 
@@ -50,11 +54,12 @@ readme_changed=$(
   } | sort -u
 )
 if [ "$readme_changed" = "README.md" ] || [ "$readme_changed" = "README.ja.md" ]; then
-  reasons+=("Only ${readme_changed} changed. README.md and README.ja.md must stay in sync — update the counterpart, or state explicitly why the change does not apply to it.")
+  reasons="${reasons}Only ${readme_changed} changed. README.md and README.ja.md must stay in sync — update the counterpart, or state explicitly why the change does not apply to it.
+"
 fi
 
-if [ ${#reasons[@]} -gt 0 ]; then
-  printf '%s\n' "${reasons[@]}" >&2
+if [ -n "$reasons" ]; then
+  printf '%s' "$reasons" >&2
   exit 2
 fi
 

@@ -6,8 +6,9 @@
 # Code stop hook (.claude/hooks/verify-before-stop.sh) recomputes it to
 # decide whether verification is still current. Content-based on purpose:
 # checkout/stash/format round-trips that leave bytes identical do not
-# invalidate a recorded verification.
-set -eu
+# invalidate a recorded verification. pipefail so a failing stage can never
+# produce a wrong-but-plausible digest.
+set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
