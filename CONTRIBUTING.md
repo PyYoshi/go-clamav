@@ -36,7 +36,8 @@ Direct pushes to `main` are rejected by repository ruleset; all changes go
 through pull requests.
 
 1. Branch from `main` (`feat/...`, `fix/...`, `docs/...`, `chore/...`).
-2. Commit with a signed signature and **no `Co-Authored-By` trailers**
+2. Commit with a signed signature, an English commit message (see the
+   language policy in AGENTS.md) and **no `Co-Authored-By` trailers**
    (signing is automatic via repo config; the commit-msg hook enforces the
    trailer rule).
 3. Push the branch and open a PR (`gh pr create`); fill in the template

@@ -55,7 +55,7 @@ A change is done only when all of the following hold:
   mirrors of each other).
 - `CHANGELOG.md` has an entry under `[Unreleased]` for any user-visible
   change (Keep a Changelog format).
-- godoc and code comments are written in English.
+- All committed text is written in English (see Language policy below).
 
 ## Design gate
 
@@ -87,6 +87,18 @@ Accepted designs are recorded as `docs/adr/NNNN-title.md`
 - Run `make setup` once per clone to enable the repository git hooks.
 
 See CONTRIBUTING.md for the full pull-request and CodeRabbit workflow.
+
+## Language policy
+
+- Everything that becomes part of the repository or its history is written
+  in **English**: code, comments, godoc, documentation, ADRs, CHANGELOG
+  entries, commit messages, and pull-request titles and descriptions.
+- Exceptions: `README.ja.md` (the Japanese mirror of `README.md`) and the
+  Japanese instruction text in `.coderabbit.yaml` (review output is
+  deliberately ja-JP).
+- Interaction language is not fixed: conversations with AI assistants and
+  review-thread discussions follow the participants' preference (e.g.
+  CodeRabbit reviews and replies to it are typically in Japanese).
 
 ## Commands
 
