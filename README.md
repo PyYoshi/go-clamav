@@ -171,6 +171,14 @@ clamd), and files are then routed to clean storage or quarantine. Run clamd
 as a sidecar or dedicated service; run freshclam next to clamd, not in your
 application.
 
+## Contributing
+
+`main` is protected by repository rulesets: changes land only through pull
+requests with all CI checks green, every commit must carry a verified
+signature, and pull requests are merged with a merge commit (squash and
+rebase are disabled so commit signatures survive). Release tags (`v*`)
+cannot be deleted or moved.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). The library talks to ClamAV over a socket and
