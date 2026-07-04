@@ -36,11 +36,20 @@ reviews:
         加えて: 標準ライブラリ以外の依存追加(このライブラリは依存ゼロが方針)、context を無視した
         ブロッキングI/O、goroutineリーク、エラーメッセージへのスキャン内容の混入を指摘してください。
         godoc とコードコメントは英語で統一します。
+    - path: "go.mod"
+      instructions: |
+        このライブラリは依存ゼロ(標準ライブラリのみ)が方針です。
+        require の追加は重大な方針逸脱として指摘してください。
     - path: "internal/proto/**"
       instructions: |
         clamd ワイヤプロトコル層です。応答パーサは接頭辞非依存・サフィックス駆動で、
         分類優先順位は FOUND > ERROR > OK、未知の応答は必ず OutcomeUnknown にします。
         この優先順位や未知応答の扱いを緩める変更(fail-open方向)は重大な欠陥として扱ってください。
+    - path: "internal/clamdtest/**"
+      instructions: |
+        テスト用フェイク clamd と EICAR ヘルパーの実体です。EICAR テスト文字列の完全形
+        (68バイト)をリポジトリに持ち込む変更は拒否してください(分割定数・hex 表記を維持。
+        チェックアウトが常駐AVに隔離される事故の防止)。
     - path: "**/*_test.go"
       instructions: |
         タイミング依存で flaky になり得るテスト、-race で壊れる並行アクセスを指摘してください。
