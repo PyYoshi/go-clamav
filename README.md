@@ -77,7 +77,11 @@ default:
 
 A complete upload endpoint (including HTTP status mapping and health checks)
 is in [examples/httpupload](examples/httpupload/main.go); a CLI scanner is in
-[examples/basicscan](examples/basicscan/main.go).
+[examples/basicscan](examples/basicscan/main.go). Mocking the client in your
+own tests (consumer-defined interface, fail-closed mock rules) is shown in
+[examples/mockscan](examples/mockscan/mockscan.go); the library deliberately
+exports no scanner interface (see
+[ADR-0004](docs/adr/0004-no-exported-scanner-interface.md)).
 
 ## API overview
 
