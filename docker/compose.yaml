@@ -1,0 +1,48 @@
+# Integration test environment for go-clamav.
+#
+# Starts clamd with a minimal EICAR-only signature database (hex-encoded in
+# clamd/db/eicar.ndb) so the container is ready in seconds and needs no
+# network access. The official image entrypoint (which would run freshclam
+# on an empty database directory) is bypassed by launching clamd directly.
+#
+# Usage:  make integration        (up + test + leave running)
+#         make integration-down   (tear down)
+#
+# The "full" profile runs a second clamd with the real signature databases
+# bundled in the image — slower to start, for local/nightly verification:
+#         docker compose -f docker/compose.yaml --profile full up -d --wait
+
+services:
+  clamd:
+    # Overridable so CI can matrix-test multiple clamd versions.
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.4}
+    entrypoint: ["/usr/sbin/clamd", "--foreground", "--config-file=/etc/clamav/clamd.conf"]
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - ./clamd/clamd.conf:/etc/clamav/clamd.conf:ro
+      - ./clamd/db:/var/lib/clamav:ro
+      - ./run:/run/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh || (echo PING | nc -w 2 127.0.0.1 3310 | grep -q PONG)"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # Real signature databases (bundled in the image at build time).
+  # Startup takes tens of seconds while ~300 MB of signatures load.
+  clamd-full:
+    profiles: [full]
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.4}
+    environment:
+      - CLAMAV_NO_FRESHCLAMD=true
+      - CLAMAV_NO_MILTERD=true
+    ports:
+      - "127.0.0.1:3311:3310"
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 120s

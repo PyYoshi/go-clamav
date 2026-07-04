@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly canary against newer ClamAV images (see integration-canary).
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go build ./... && go build -tags=integration ./...
+      - run: go test -race -count=1 ./...
+      - name: Short fuzz pass
+        run: go test -run='^$' -fuzz=FuzzParseScanResponse -fuzztime=30s ./internal/proto/
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # Required: pinned ClamAV versions. 1.0 is the LTS floor, 1.4 the primary
+  # target. `latest` is intentionally NOT here — see integration-canary.
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        clamav: ["1.0", "1.4"]
+    env:
+      CLAMAV_IMAGE: clamav/clamav:${{ matrix.clamav }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Start clamd
+        run: make integration-up
+      - name: Integration tests
+        run: make test-integration
+      - name: clamd logs
+        if: failure()
+        run: make integration-logs
+      - name: Teardown
+        if: always()
+        run: make integration-down
+
+  # Canary only: tracks the moving `latest` image on the weekly schedule so
+  # upstream changes surface as signal without breaking required CI.
+  integration-canary:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      CLAMAV_IMAGE: clamav/clamav:latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Start clamd
+        run: make integration-up
+      - name: Integration tests
+        run: make test-integration
+      - name: clamd logs
+        if: failure()
+        run: make integration-logs
+      - name: Teardown
+        if: always()
+        run: make integration-down
