@@ -36,6 +36,20 @@ integration-down: ## Tear down the clamd test container
 integration-logs:
 	$(COMPOSE) logs --no-color
 
+.PHONY: verify
+verify: ## Full local verification (build + lint + test); records success for the harness
+	$(GO) build ./...
+	$(GO) build -tags=integration ./...
+	$(MAKE) lint
+	$(MAKE) test
+	./scripts/record-verified.sh
+
+.PHONY: setup
+setup: ## One-time developer setup: enable git hooks, check tooling
+	git config core.hooksPath githooks
+	chmod +x githooks/* scripts/*.sh .claude/hooks/*.sh
+	@command -v jq >/dev/null 2>&1 || echo "WARNING: jq not found; Claude Code guard hooks are inert without it."
+
 .PHONY: lint
 lint: ## Static analysis (golangci-lint + govulncheck)
 	$(GOLANGCI_LINT) run

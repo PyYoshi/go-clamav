@@ -36,6 +36,8 @@ reviews:
         加えて: 標準ライブラリ以外の依存追加(このライブラリは依存ゼロが方針)、context を無視した
         ブロッキングI/O、goroutineリーク、エラーメッセージへのスキャン内容の混入を指摘してください。
         godoc とコードコメントは英語で統一します。
+        ユーザーから見える振る舞いの変更に CHANGELOG.md の [Unreleased] エントリが
+        伴っていない場合も指摘してください。
     - path: "go.mod"
       instructions: |
         このライブラリは依存ゼロ(標準ライブラリのみ)が方針です。
@@ -72,6 +74,25 @@ reviews:
       instructions: |
         README.ja.md(日本語)と README.md(英語)は内容を同期させる方針です。
         片方だけが変更されている場合は乖離として指摘してください。
+    - path: "AGENTS.md"
+      instructions: |
+        人間・AI共通の開発規約の正本です。不変条件・Definition of Done・設計ゲート・
+        git規約を削除・緩和する変更は重大な指摘として扱ってください。
+        CLAUDE.md(@AGENTS.md import)および CONTRIBUTING.md との整合も確認してください。
+    - path: ".claude/**"
+      instructions: |
+        Claude Code 用の開発ハーネス(hooks・skills・settings)です。ガードの無効化・
+        緩和 — exit 0 への変更、検出パターンやブロック対象の削除、Stop hook の除去、
+        hooks 配線の削除 — は重大な指摘として扱ってください。
+    - path: "githooks/**"
+      instructions: |
+        全コントリビューター共通の git フックです。Co-Authored-By 拒否・EICAR 検査の
+        削除や緩和は重大な指摘として扱ってください。
+    - path: "scripts/**"
+      instructions: |
+        git フック・CI・Claude Code hooks が共有するガードロジックです。EICAR パターンは
+        実行時に hex から組み立てる方式を維持してください(平文定数化は拒否)。検査の
+        削除・緩和・fail-open 化は重大な指摘として扱ってください。
 
   tools:
     github-checks:

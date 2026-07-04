@@ -23,6 +23,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 - `make format`: gofumpt + gci formatting via `golangci-lint fmt`.
 - Dependabot configuration (gomod, GitHub Actions, compose images).
+- Development harness for human and AI contributors: the AGENTS.md
+  contract (invariants, Definition of Done, design gate), CONTRIBUTING.md,
+  an ADR template plus backfilled ADRs (0002 fail-closed error model,
+  0003 zero-dependency policy), a pull-request template, shared guard
+  scripts (`scripts/`), repository git hooks (`githooks/`, enabled via
+  `make setup`), Claude Code hooks and skills (`.claude/`), new
+  `make verify` / `make setup` targets, and CI guards for the assembled
+  EICAR string and the zero-dependency policy.
 
 ## [0.1.0] - 2026-07-04
 

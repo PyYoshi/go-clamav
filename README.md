@@ -179,6 +179,11 @@ signature, and pull requests are merged with a merge commit (squash and
 rebase are disabled so commit signatures survive). Release tags (`v*`)
 cannot be deleted or moved.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, and
+[AGENTS.md](AGENTS.md) for the rules every contributor — human and AI —
+works under. Run `make setup` once per clone to enable the repository git
+hooks.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). The library talks to ClamAV over a socket and

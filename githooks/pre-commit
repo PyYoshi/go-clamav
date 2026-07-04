@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Blocks commits that would introduce the assembled EICAR test string.
+# Enable with: make setup
+set -eu
+
+exec "$(git rev-parse --show-toplevel)/scripts/check-eicar.sh" staged

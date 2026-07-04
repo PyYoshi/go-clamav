@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Lightweight pre-push scan (<1s) of outgoing commits only:
+#   - commit messages must not carry Co-Authored-By trailers (this is the
+#     only local net that survives rebases, where commit-msg does not re-run)
+#   - outgoing patches must not introduce the assembled EICAR test string
+# Lint and tests are deliberately NOT run here; the required CI checks
+# enforce them. Enable with: make setup
+set -eu
+
+top=$(git rev-parse --show-toplevel)
+zero=0000000000000000000000000000000000000000
+
+while read -r _local_ref local_sha _remote_ref remote_sha || [ -n "${local_sha:-}" ]; do
+  [ -n "${local_sha:-}" ] || continue
+  [ "$local_sha" = "$zero" ] && continue # deleting a remote ref
+
+  if [ "$remote_sha" = "$zero" ] || ! git rev-parse -q --verify "$remote_sha^{commit}" >/dev/null 2>&1; then
+    # New remote ref (or a remote tip we do not have locally): examine only
+    # commits not already on any remote.
+    range=("$local_sha" --not --remotes)
+  else
+    range=("$remote_sha..$local_sha")
+  fi
+
+  if git log --format='%B' "${range[@]}" | grep -qiE '^[[:space:]]*Co-Authored-By:'; then
+    echo "pre-push: an outgoing commit message contains a Co-Authored-By trailer." >&2
+    echo "pre-push: rewrite the message (git commit --amend / git rebase) before pushing." >&2
+    exit 1
+  fi
+
+  git log -p --format= "${range[@]}" | "$top/scripts/check-eicar.sh" stdin
+done
+
+exit 0
