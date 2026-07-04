@@ -97,10 +97,10 @@ type ScanResponse struct {
 // file path for path-based scans), so classification relies on the reply
 // suffix only:
 //
-//	"<prefix>: <signature> FOUND"  -> OutcomeInfected
-//	"<message> ERROR"              -> OutcomeError
-//	"<prefix>: OK" or "OK"         -> OutcomeClean
-//	anything else                  -> OutcomeUnknown (fail-closed)
+//	"<prefix>: <signature> FOUND"     -> OutcomeInfected
+//	"<message> ERROR"                 -> OutcomeError
+//	"OK" or "<stream prefix>: OK"     -> OutcomeClean
+//	anything else                     -> OutcomeUnknown (fail-closed)
 //
 // FOUND is checked before ERROR and OK: when a response is ambiguous the
 // parser must never prefer the more permissive classification. Signature
@@ -127,8 +127,18 @@ func ParseScanResponse(line string) ScanResponse {
 			Message:   msg,
 			SizeLimit: isSizeLimitMessage(msg),
 		}
-	case line == "OK", strings.HasSuffix(line, ": OK"):
+	case line == "OK":
 		return ScanResponse{Outcome: OutcomeClean}
+	case strings.HasSuffix(line, ": OK"):
+		// Trust only the OK forms INSTREAM can actually produce:
+		// "stream: OK" and the legacy "instream (local): OK". An OK with
+		// any other prefix (e.g. a path — this client never issues SCAN)
+		// stays unknown rather than being accepted as a verdict.
+		prefix := strings.TrimSuffix(line, ": OK")
+		if strings.Contains(strings.ToLower(prefix), "stream") {
+			return ScanResponse{Outcome: OutcomeClean}
+		}
+		return ScanResponse{Outcome: OutcomeUnknown, Message: line}
 	default:
 		return ScanResponse{Outcome: OutcomeUnknown, Message: line}
 	}

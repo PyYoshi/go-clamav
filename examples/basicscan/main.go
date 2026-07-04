@@ -48,8 +48,12 @@ func main() {
 		case res.Infected():
 			fmt.Printf("%s: INFECTED (%s)\n", path, res.Signature)
 			exit = max(exit, 1)
-		default:
+		case res.Clean():
 			fmt.Printf("%s: clean\n", path)
+		default:
+			// Unreachable under the library contract; fail-closed backstop.
+			fmt.Printf("%s: UNKNOWN (indeterminate verdict)\n", path)
+			exit = max(exit, 2)
 		}
 	}
 	os.Exit(exit)

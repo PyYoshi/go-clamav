@@ -88,8 +88,10 @@ func StreamAll(w io.Writer, r io.Reader, chunkSize int, maxBytes int64) (int64, 
 				return total, ErrSizeLimitExceeded
 			}
 			binary.BigEndian.PutUint32(buf[:chunkHeaderSize], uint32(n))
-			if _, werr := w.Write(buf[:chunkHeaderSize+n]); werr != nil {
+			if wn, werr := w.Write(buf[:chunkHeaderSize+n]); werr != nil {
 				return total, &SinkError{Err: werr}
+			} else if wn != chunkHeaderSize+n {
+				return total, &SinkError{Err: io.ErrShortWrite}
 			}
 			total += int64(n)
 		}
@@ -101,8 +103,10 @@ func StreamAll(w io.Writer, r io.Reader, chunkSize int, maxBytes int64) (int64, 
 		}
 	}
 	binary.BigEndian.PutUint32(buf[:chunkHeaderSize], 0)
-	if _, werr := w.Write(buf[:chunkHeaderSize]); werr != nil {
+	if wn, werr := w.Write(buf[:chunkHeaderSize]); werr != nil {
 		return total, &SinkError{Err: werr}
+	} else if wn != chunkHeaderSize {
+		return total, &SinkError{Err: io.ErrShortWrite}
 	}
 	return total, nil
 }

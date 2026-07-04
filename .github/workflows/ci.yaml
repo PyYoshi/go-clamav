@@ -19,6 +19,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          check-latest: true
       - run: go vet ./...
       - run: go build ./... && go build -tags=integration ./...
       - run: go test -race -count=1 ./...
@@ -32,6 +33,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          check-latest: true
       - name: staticcheck
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
@@ -56,6 +58,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          check-latest: true
       - name: Start clamd
         run: make integration-up
       - name: Integration tests
@@ -80,6 +83,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          check-latest: true
       - name: Start clamd
         run: make integration-up
       - name: Integration tests

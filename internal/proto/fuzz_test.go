@@ -36,8 +36,10 @@ func FuzzParseScanResponse(f *testing.F) {
 		// Fail-closed invariants: "clean" is only ever produced by an
 		// exact OK suffix, and any FOUND suffix must classify as infected.
 		if got.Outcome == OutcomeClean {
-			if trimmed != "OK" && !strings.HasSuffix(trimmed, ": OK") {
-				t.Fatalf("clean verdict from non-OK input %q", line)
+			okSuffix := strings.HasSuffix(trimmed, ": OK") &&
+				strings.Contains(strings.ToLower(strings.TrimSuffix(trimmed, ": OK")), "stream")
+			if trimmed != "OK" && !okSuffix {
+				t.Fatalf("clean verdict from non-stream-OK input %q", line)
 			}
 		}
 		if strings.HasSuffix(trimmed, " FOUND") && got.Outcome != OutcomeInfected {

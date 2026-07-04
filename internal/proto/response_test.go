@@ -93,9 +93,19 @@ func TestParseScanResponse(t *testing.T) {
 			ScanResponse{Outcome: OutcomeClean},
 		},
 		{
-			"clean path prefix",
-			"/tmp/upload.bin: OK",
+			"clean legacy instream prefix",
+			"instream (local): OK",
 			ScanResponse{Outcome: OutcomeClean},
+		},
+		{
+			"path-prefixed OK is not trusted (SCAN is never issued)",
+			"/tmp/upload.bin: OK",
+			ScanResponse{Outcome: OutcomeUnknown, Message: "/tmp/upload.bin: OK"},
+		},
+		{
+			"unknown prefix OK is not trusted",
+			"garbage: OK",
+			ScanResponse{Outcome: OutcomeUnknown, Message: "garbage: OK"},
 		},
 		{
 			"infected eicar",

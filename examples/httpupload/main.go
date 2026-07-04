@@ -109,11 +109,17 @@ func uploadHandler(scanner *clamav.Client, logger *slog.Logger) http.HandlerFunc
 				"file", header.Filename, "signature", result.Signature)
 			http.Error(w, "upload rejected", http.StatusBadRequest)
 
-		default:
+		case result.Clean():
 			// Clean: only now may the file be moved to permanent storage.
 			logger.Info("upload accepted", "file", header.Filename, "bytes", header.Size)
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("accepted\n"))
+
+		default:
+			// Unreachable under the library contract (a nil error implies
+			// a definitive verdict); kept as a fail-closed backstop.
+			logger.Error("indeterminate verdict", "file", header.Filename)
+			http.Error(w, "scan unavailable, upload rejected", http.StatusServiceUnavailable)
 		}
 	}
 }
