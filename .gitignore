@@ -1,0 +1,23 @@
+# Binaries and build artifacts
+/bin/
+*.test
+*.out
+
+# Fuzzing corpus generated locally
+/testdata/fuzz/
+
+# Docker runtime directory (unix socket bind mount target)
+/docker/run/*
+!/docker/run/.gitkeep
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Session / tooling state
+.omc/
+.claude/
