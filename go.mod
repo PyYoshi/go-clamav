@@ -1,3 +1,3 @@
 module github.com/PyYoshi/go-clamav
 
-go 1.26.4
+go 1.26.5
