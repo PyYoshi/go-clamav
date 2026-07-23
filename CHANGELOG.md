@@ -6,6 +6,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the Go toolchain floor to 1.26.5, which carries the fix for
+  GO-2026-5856 (Encrypted Client Hello privacy leak in `crypto/tls`).
+  Older local toolchains fetch it automatically via `GOTOOLCHAIN=auto`.
+
 ## [0.2.0] - 2026-07-05
 
 ### Changed
