@@ -32,6 +32,25 @@ services:
       retries: 20
       start_period: 20s
 
+  # Alert-enabled clamd (clamd-strict.conf): encrypted-archive/document,
+  # broken-media and limit-exceeded heuristics turned on, with tiny limits
+  # so the alert paths trigger with small samples. TCP only — the default
+  # service owns the shared unix socket. Exercised by TestIntegrationStrict.
+  clamd-strict:
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.5}
+    entrypoint: ["/usr/sbin/clamd", "--foreground", "--config-file=/etc/clamav/clamd.conf"]
+    ports:
+      - "127.0.0.1:3312:3310"
+    volumes:
+      - ./clamd/clamd-strict.conf:/etc/clamav/clamd.conf:ro
+      - ./clamd/db:/var/lib/clamav:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo PING | nc -w 2 127.0.0.1 3310 | grep -q PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
   # Real signature databases (bundled in the image at build time).
   # Startup takes tens of seconds while ~300 MB of signatures load.
   clamd-full:
