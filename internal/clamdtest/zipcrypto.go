@@ -49,8 +49,10 @@ type ZipEntry struct {
 // It is hand-rolled because archive/zip cannot write encrypted entries and
 // the zero-dependency policy (ADR-0003) rules out external zip libraries.
 // Only what the integration tests need is implemented: store and raw-deflate
-// methods, optional ZipCrypto encryption, no zip64. The output is accepted
-// by archive/zip, unzip and 7z (round-trip covered by unit tests).
+// methods, optional ZipCrypto encryption, no zip64. Round-trip through
+// archive/zip (including keystream decryption of encrypted entries) is
+// covered by unit tests; acceptance by unzip and 7z was verified manually
+// during the 2026-07-30 clamd behavior verification.
 //
 // BuildZip panics on an entry that is both encrypted and deflated; the
 // harness never needs that combination.

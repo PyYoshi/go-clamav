@@ -45,7 +45,7 @@ services:
       - ./clamd/clamd-strict.conf:/etc/clamav/clamd.conf:ro
       - ./clamd/db:/var/lib/clamav:ro
     healthcheck:
-      test: ["CMD-SHELL", "echo PING | nc -w 2 127.0.0.1 3310 | grep -q PONG"]
+      test: ["CMD-SHELL", "clamdcheck.sh || (echo PING | nc -w 2 127.0.0.1 3310 | grep -q PONG)"]
       interval: 3s
       timeout: 5s
       retries: 20
