@@ -112,6 +112,27 @@ func TestIntegration(t *testing.T) {
 				}
 			})
 
+			t.Run("EncryptedZipSilentPassByDefault", func(t *testing.T) {
+				// The default clamd config leaves AlertEncryptedArchive off,
+				// so an encrypted archive scans clean — the container reply
+				// carries no trace of the skipped content. Deployments that
+				// must reject encrypted archives need the alert enabled (see
+				// clamd-strict.conf and TestIntegrationStrict); this test
+				// documents the silent-pass default so a distro flip of that
+				// default gets noticed.
+				res, err := c.ScanBytes(testCtx(t), clamdtest.BuildZip(clamdtest.ZipEntry{
+					Name:     "benign.txt",
+					Data:     []byte("harmless encrypted entry\n"),
+					Password: "pass",
+				}))
+				if err != nil {
+					t.Fatalf("ScanBytes() = %v", err)
+				}
+				if !res.Clean() {
+					t.Errorf("encrypted zip on default config = %+v, want clean", res)
+				}
+			})
+
 			t.Run("ScanFileEICAR", func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "eicar.bin")
 				if err := os.WriteFile(path, clamdtest.EICAR(), 0o600); err != nil {

@@ -6,6 +6,24 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Integration coverage for clamd's heuristic alert behavior, verified
+  against ClamAV 1.4.5 and 1.5.3: a second alert-enabled clamd service
+  (`docker/clamd/clamd-strict.conf`, `AlertEncryptedArchive`,
+  `AlertEncryptedDoc`, `AlertExceedsMax`, `AlertBrokenMedia`) and a
+  `TestIntegrationStrict` suite asserting that a real signature outranks
+  the encrypted-entry heuristic in mixed archives (with the default
+  `HeuristicScanPrecedence no`), and that encrypted archives, broken
+  media and exceeded limits surface as `Heuristics.*` detections rather
+  than silent `OK` replies. The default-config suite now also documents
+  that encrypted archives scan clean while the alerts are off.
+- `internal/clamdtest`: in-memory builders for the samples behind those
+  tests — a hand-rolled ZIP writer with PKWARE "ZipCrypto" encryption
+  (`BuildZip`), nested archives (`NestedZip`), and broken-media samples
+  (`TruncatedPNG`, `HeaderOnlyJPEG`). Standard library only; EICAR-bearing
+  archives are assembled at run time and never written to disk.
+
 ## [0.2.1] - 2026-07-24
 
 ### Changed
