@@ -19,6 +19,24 @@ make setup
 This points `core.hooksPath` at [`githooks/`](githooks/) (commit-msg,
 pre-commit and pre-push guards) and checks tooling.
 
+To verify commit signatures locally (`git log --format='%h %G?'` showing
+`G`, as AGENTS.md expects), tell git which SSH signing keys to trust:
+
+```sh
+git config gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers
+```
+
+and list each contributor's signing key in that file, one entry per line:
+
+```
+<email> <key-type> <public-key>
+```
+
+Without this setup, signed commits show `U` (good signature, unknown
+validity) or `E` (cannot check) instead of `G` — the signatures
+themselves are intact either way, and GitHub verifies them server-side
+against each author's uploaded keys.
+
 ## Everyday commands
 
 | Command | Purpose |
