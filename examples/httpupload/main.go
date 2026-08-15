@@ -81,6 +81,11 @@ func uploadHandler(scanner *clamav.Client, logger *slog.Logger) http.HandlerFunc
 		// Defense in depth: cap the request body before it reaches the
 		// scanner at all.
 		r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+(1<<20))
+		// FormFile parses the whole multipart body up front and can hold
+		// close to the full body cap (~26 MiB) in memory per in-flight
+		// request — before the WithMaxConcurrentScans semaphore applies
+		// (it bounds concurrent scans, not concurrent uploads). Switch to
+		// r.MultipartReader() for streaming if that matters at your scale.
 		file, header, err := r.FormFile("file")
 		if err != nil {
 			var tooLarge *http.MaxBytesError
