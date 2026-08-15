@@ -42,7 +42,7 @@ func FuzzParseScanResponse(f *testing.F) {
 		// exact OK allowlist (ADR-0005), and any FOUND suffix must
 		// classify as infected.
 		if got.Outcome == OutcomeClean {
-			if trimmed != "OK" && trimmed != "stream: OK" && trimmed != "instream (local): OK" {
+			if trimmed != "OK" && trimmed != "stream: OK" {
 				t.Fatalf("clean verdict outside the exact OK allowlist: %q", line)
 			}
 		}

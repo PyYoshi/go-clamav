@@ -96,9 +96,14 @@ func TestParseScanResponse(t *testing.T) {
 			ScanResponse{Outcome: OutcomeClean},
 		},
 		{
-			"clean legacy instream prefix",
+			"instream prefix OK is not trusted (ADR-0005: never sent for INSTREAM)",
 			"instream (local): OK",
-			ScanResponse{Outcome: OutcomeClean},
+			ScanResponse{Outcome: OutcomeUnknown, Message: "instream (local): OK"},
+		},
+		{
+			"upstream instream spelling is equally untrusted (ADR-0005)",
+			"instream(local): OK",
+			ScanResponse{Outcome: OutcomeUnknown, Message: "instream(local): OK"},
 		},
 		{
 			"path-prefixed OK is not trusted (SCAN is never issued)",
@@ -151,7 +156,7 @@ func TestParseScanResponse(t *testing.T) {
 			ScanResponse{Outcome: OutcomeInfected, Signature: "Some sig with spaces"},
 		},
 		{
-			"infected legacy prefix",
+			"infected classification stays prefix-agnostic",
 			"instream (local): Eicar-Signature FOUND",
 			ScanResponse{Outcome: OutcomeInfected, Signature: "Eicar-Signature"},
 		},

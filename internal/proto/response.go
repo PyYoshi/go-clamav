@@ -116,8 +116,7 @@ type ScanResponse struct {
 //
 //	"<prefix>: <signature> FOUND"       -> OutcomeInfected
 //	"<message> ERROR"                   -> OutcomeError
-//	"OK", "stream: OK", or
-//	"instream (local): OK"  (exact)     -> OutcomeClean
+//	"OK" or "stream: OK"  (exact)       -> OutcomeClean
 //	anything else                       -> OutcomeUnknown (fail-closed)
 //
 // FOUND is checked before ERROR and OK: when a response is ambiguous the
@@ -145,13 +144,12 @@ func ParseScanResponse(line string) ScanResponse {
 			Message:   msg,
 			SizeLimit: isSizeLimitMessage(msg),
 		}
-	case line == "OK", line == "stream: OK", line == "instream (local): OK":
+	case line == "OK", line == "stream: OK":
 		// Exact allowlist of the OK replies INSTREAM can produce
-		// (ADR-0005): clamd replies "stream: OK"; "instream (local): OK"
-		// is kept for legacy compatibility and a bare "OK" is tolerated.
-		// An OK with any other prefix (e.g. a path — this client never
-		// issues SCAN) stays unknown rather than being accepted as a
-		// verdict.
+		// (ADR-0005): clamd's INSTREAM path always replies with the
+		// "stream" prefix, and a bare "OK" is tolerated. An OK with any
+		// other prefix (e.g. a path — this client never issues SCAN)
+		// stays unknown rather than being accepted as a verdict.
 		return ScanResponse{Outcome: OutcomeClean}
 	default:
 		return ScanResponse{Outcome: OutcomeUnknown, Message: line}

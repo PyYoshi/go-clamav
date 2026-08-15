@@ -1,6 +1,7 @@
 # ADR-0001: clamd socket client over libclamav (cgo)
 
-- Status: Accepted
+- Status: Accepted (the OK-form part of the parser mitigation below is
+  superseded by ADR-0005)
 - Date: 2026-07-04
 
 ## Context
