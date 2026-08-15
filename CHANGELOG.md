@@ -13,6 +13,26 @@ project adheres to [Semantic Versioning](https://semver.org/).
   (`encoding/asn1`). Older local toolchains fetch it automatically via
   `GOTOOLCHAIN=auto`.
 
+## [0.2.2] - 2026-07-30
+
+### Added
+
+- Integration coverage for clamd's heuristic alert behavior, verified
+  against ClamAV 1.4.5 and 1.5.3: a second alert-enabled clamd service
+  (`docker/clamd/clamd-strict.conf`, `AlertEncryptedArchive`,
+  `AlertEncryptedDoc`, `AlertExceedsMax`, `AlertBrokenMedia`) and a
+  `TestIntegrationStrict` suite asserting that a real signature outranks
+  the encrypted-entry heuristic in mixed archives (with the default
+  `HeuristicScanPrecedence no`), and that encrypted archives, broken
+  media and exceeded limits surface as `Heuristics.*` detections rather
+  than silent `OK` replies. The default-config suite now also documents
+  that encrypted archives scan clean while the alerts are off.
+- `internal/clamdtest`: in-memory builders for the samples behind those
+  tests — a hand-rolled ZIP writer with PKWARE "ZipCrypto" encryption
+  (`BuildZip`), nested archives (`NestedZip`), and broken-media samples
+  (`TruncatedPNG`, `HeaderOnlyJPEG`). Standard library only; EICAR-bearing
+  archives are assembled at run time and never written to disk.
+
 ## [0.2.1] - 2026-07-24
 
 ### Changed
@@ -78,7 +98,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
   SECURITY.md threat model, ADR-0001, operations guide, runnable examples
   (`basicscan`, `httpupload`).
 
-[Unreleased]: https://github.com/PyYoshi/go-clamav/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/PyYoshi/go-clamav/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/PyYoshi/go-clamav/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/PyYoshi/go-clamav/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PyYoshi/go-clamav/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PyYoshi/go-clamav/releases/tag/v0.1.0

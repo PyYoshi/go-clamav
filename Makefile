@@ -23,6 +23,7 @@ integration-up: ## Start the clamd test container
 test-integration: ## Run integration tests against the running container
 	CLAMAV_TCP_ADDR=tcp://127.0.0.1:3310 \
 	CLAMAV_UNIX_ADDR=unix://$(CURDIR)/docker/run/clamd.sock \
+	CLAMAV_STRICT_TCP_ADDR=tcp://127.0.0.1:3312 \
 	$(GO) test -race -count=1 -tags=integration ./...
 
 .PHONY: integration
