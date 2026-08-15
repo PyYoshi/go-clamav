@@ -1,6 +1,7 @@
 # ADR-0001: clamd socket client over libclamav (cgo)
 
-- Status: Accepted
+- Status: Accepted (the OK-form part of the parser mitigation below is
+  superseded by ADR-0005)
 - Date: 2026-07-04
 
 ## Context
@@ -57,6 +58,14 @@ scanned is exactly what was read.
   unversioned; older versions used different prefixes ("instream (local):"
   vs "stream:"). Mitigated with a prefix-agnostic, suffix-based parser
   (FOUND / ERROR / OK), fuzzing, and a CI matrix across clamd versions.
+
+  *Correction (ADR-0005, 2026-08-15): the premise about prefixes was
+  wrong. Upstream `clamd/scanner.c` has always answered INSTREAM with the
+  `stream` prefix; `instream(local)` is a log-only string and never
+  appears in a reply, at any version. The mitigation stands for FOUND and
+  ERROR, which remain suffix-driven; OK is now matched against an exact
+  allowlist instead. The original text is left as written — it records
+  what was believed when this decision was made.*
 - **Bytes cross the socket twice** (source → app → clamd). True, and
   irrelevant in practice over unix sockets / loopback; the reference GCP
   architecture has the same property.

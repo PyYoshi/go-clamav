@@ -108,15 +108,16 @@ type ScanResponse struct {
 
 // ParseScanResponse classifies a single scan response line.
 //
-// The parser is deliberately prefix-agnostic: clamd historically used
-// different reply prefixes ("stream: ...", "instream (local): ...", or a
-// file path for path-based scans), so classification relies on the reply
-// suffix only:
+// FOUND and ERROR are matched by suffix: clamd prefixes replies with the
+// scanned object's name, and signature names or error messages may contain
+// spaces, so only the trailing token is load-bearing. Clean verdicts are
+// stricter — only an exact allowlist of OK reply lines is accepted
+// (ADR-0005):
 //
-//	"<prefix>: <signature> FOUND"     -> OutcomeInfected
-//	"<message> ERROR"                 -> OutcomeError
-//	"OK" or "<stream prefix>: OK"     -> OutcomeClean
-//	anything else                     -> OutcomeUnknown (fail-closed)
+//	"<prefix>: <signature> FOUND"       -> OutcomeInfected
+//	"<message> ERROR"                   -> OutcomeError
+//	"OK" or "stream: OK"  (exact)       -> OutcomeClean
+//	anything else                       -> OutcomeUnknown (fail-closed)
 //
 // FOUND is checked before ERROR and OK: when a response is ambiguous the
 // parser must never prefer the more permissive classification. Signature
@@ -143,18 +144,13 @@ func ParseScanResponse(line string) ScanResponse {
 			Message:   msg,
 			SizeLimit: isSizeLimitMessage(msg),
 		}
-	case line == "OK":
-		return ScanResponse{Outcome: OutcomeClean}
-	case strings.HasSuffix(line, ": OK"):
-		// Trust only the OK forms INSTREAM can actually produce:
-		// "stream: OK" and the legacy "instream (local): OK". An OK with
-		// any other prefix (e.g. a path — this client never issues SCAN)
+	case line == "OK", line == "stream: OK":
+		// Exact allowlist of the OK replies INSTREAM can produce
+		// (ADR-0005): clamd's INSTREAM path always replies with the
+		// "stream" prefix, and a bare "OK" is tolerated. An OK with any
+		// other prefix (e.g. a path — this client never issues SCAN)
 		// stays unknown rather than being accepted as a verdict.
-		prefix := strings.TrimSuffix(line, ": OK")
-		if strings.Contains(strings.ToLower(prefix), "stream") {
-			return ScanResponse{Outcome: OutcomeClean}
-		}
-		return ScanResponse{Outcome: OutcomeUnknown, Message: line}
+		return ScanResponse{Outcome: OutcomeClean}
 	default:
 		return ScanResponse{Outcome: OutcomeUnknown, Message: line}
 	}
