@@ -109,7 +109,7 @@ See CONTRIBUTING.md for the full pull-request and CodeRabbit workflow.
 | `make format` | gofumpt + gci via golangci-lint fmt |
 | `make test` | go vet + race-enabled unit tests |
 | `make integration` | End-to-end tests against dockerized clamd |
-| `make fuzz` | Short fuzz pass over the reply parser |
+| `make fuzz` | Short fuzz pass over the reply parser and reply readers |
 
 ## Harness layout
 

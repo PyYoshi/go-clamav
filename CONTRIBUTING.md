@@ -26,7 +26,7 @@ pre-commit and pre-push guards) and checks tooling.
 | `make format` | Format with gofumpt + gci |
 | `make verify` | Build (incl. integration tags) + lint + tests |
 | `make integration` | End-to-end tests against dockerized clamd |
-| `make fuzz` | Short fuzz pass over the reply parser |
+| `make fuzz` | Short fuzz pass over the reply parser and reply readers |
 
 `make verify` is the Definition-of-Done gate: run it before every push.
 

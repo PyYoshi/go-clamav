@@ -51,6 +51,8 @@ type Response struct {
 	// DripInterval, if set, writes Data one byte at a time with this
 	// interval between bytes (for no-progress deadline tests: each byte
 	// is progress, so a slow reply must not trip the per-op I/O timeout).
+	// len(Data) * DripInterval must stay well under connSafetyDeadline,
+	// or the connection deadline truncates the reply mid-write.
 	DripInterval time.Duration
 }
 
@@ -142,6 +144,10 @@ func (f *Fake) SetStreamLimit(n int64) { f.streamLimit.Store(n) }
 // draining the rest of the stream — the way a real clamd behaves when it
 // reaches a verdict before the client finishes sending. The handler is
 // not invoked for such connections.
+//
+// Set either this or SetStreamLimit, not both: their thresholds are
+// checked on the same chunk boundary and the early reply wins, which
+// makes a test that configures both read as ambiguous.
 func (f *Fake) SetEarlyReply(afterBytes int64, raw string) {
 	f.earlyReply.Store(&earlyReply{after: afterBytes, data: []byte(raw)})
 }

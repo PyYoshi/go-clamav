@@ -11,9 +11,7 @@ test: ## Unit tests (no Docker required)
 
 .PHONY: fuzz
 fuzz: ## Short fuzzing pass over the reply parser and reply readers
-	$(GO) test -run='^$$' -fuzz='^FuzzParseScanResponse$$' -fuzztime=10s ./internal/proto/
-	$(GO) test -run='^$$' -fuzz='^FuzzReadLine$$' -fuzztime=10s ./internal/proto/
-	$(GO) test -run='^$$' -fuzz='^FuzzReadBlock$$' -fuzztime=10s ./internal/proto/
+	./scripts/fuzz.sh
 
 .PHONY: integration-up
 integration-up: ## Start the clamd test container

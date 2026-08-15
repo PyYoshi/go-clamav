@@ -752,8 +752,11 @@ func TestScanBytesSizeLimitBoundary(t *testing.T) {
 // the I/O timeout — bounding the total is the caller's context's job.
 func TestScanSlowDripReply(t *testing.T) {
 	const (
-		drip      = 50 * time.Millisecond
-		ioTimeout = 250 * time.Millisecond
+		drip = 50 * time.Millisecond
+		// 10x the drip interval, so a single step stalling on a loaded
+		// runner cannot trip the deadline; the 11-byte reply still takes
+		// ~550ms and clears the assertion below.
+		ioTimeout = 500 * time.Millisecond
 	)
 	fake := clamdtest.New(t, "unix")
 	fake.SetHandler(func(clamdtest.Request) clamdtest.Response {

@@ -24,10 +24,7 @@ jobs:
       - run: go build ./... && go build -tags=integration ./...
       - run: go test -race -count=1 ./...
       - name: Short fuzz pass
-        run: |
-          go test -run='^$' -fuzz='^FuzzParseScanResponse$' -fuzztime=10s ./internal/proto/
-          go test -run='^$' -fuzz='^FuzzReadLine$' -fuzztime=10s ./internal/proto/
-          go test -run='^$' -fuzz='^FuzzReadBlock$' -fuzztime=10s ./internal/proto/
+        run: bash ./scripts/fuzz.sh
 
   lint:
     runs-on: ubuntu-latest
