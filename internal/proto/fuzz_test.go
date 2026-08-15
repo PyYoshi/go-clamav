@@ -20,6 +20,9 @@ func FuzzParseScanResponse(f *testing.F) {
 		"\x00",
 		"stream: OK FOUND",
 		"NOT OK",
+		"instream (local): OK",
+		"STREAM: OK",
+		"foostream: OK",
 		strings.Repeat("A", MaxLineResponse),
 	}
 	for _, s := range seeds {
@@ -33,13 +36,12 @@ func FuzzParseScanResponse(f *testing.F) {
 			t.Fatalf("invalid outcome %d for %q", got.Outcome, line)
 		}
 		trimmed := strings.TrimRight(line, " \t\r\n\x00")
-		// Fail-closed invariants: "clean" is only ever produced by an
-		// exact OK suffix, and any FOUND suffix must classify as infected.
+		// Fail-closed invariants: "clean" is only ever produced by the
+		// exact OK allowlist (ADR-0005), and any FOUND suffix must
+		// classify as infected.
 		if got.Outcome == OutcomeClean {
-			okSuffix := strings.HasSuffix(trimmed, ": OK") &&
-				strings.Contains(strings.ToLower(strings.TrimSuffix(trimmed, ": OK")), "stream")
-			if trimmed != "OK" && !okSuffix {
-				t.Fatalf("clean verdict from non-stream-OK input %q", line)
+			if trimmed != "OK" && trimmed != "stream: OK" {
+				t.Fatalf("clean verdict outside the exact OK allowlist: %q", line)
 			}
 		}
 		if strings.HasSuffix(trimmed, " FOUND") && got.Outcome != OutcomeInfected {

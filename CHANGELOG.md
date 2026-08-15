@@ -12,6 +12,27 @@ project adheres to [Semantic Versioning](https://semver.org/).
   GO-2026-6090 (`crypto/tls`), GO-2026-6089 (`net/http`) and GO-2026-5972
   (`encoding/asn1`). Older local toolchains fetch it automatically via
   `GOTOOLCHAIN=auto`.
+- CI hardening: every GitHub Action is now pinned to a release commit SHA
+  (kept current by Dependabot), checkout no longer persists credentials
+  into the workspace (no job runs authenticated git commands), and
+  govulncheck is pinned to a release version in CI and the Makefile
+  instead of `@latest` (the vulnerability database is still fetched live
+  at scan time).
+- Reply classification is stricter: a clean verdict is now produced only
+  by the exact reply lines `stream: OK` or `OK` (ADR-0005). Previously
+  any `<prefix>: OK` whose prefix contained "stream"
+  (case-insensitively) was accepted — including `instream (local): OK`,
+  a form no released clamd has ever sent. Such replies now fail closed
+  as a `ProtocolError`.
+
+### Fixed
+
+- `ScanFile` can no longer block indefinitely when the target path is
+  swapped for a FIFO between the type check and the open: on unix the
+  scan target is now opened non-blocking, and the existing descriptor
+  re-check rejects non-regular files (ADR-0006). Hardening rather than a
+  live exposure — the precondition is write access to the scanned
+  directory.
 
 ## [0.2.2] - 2026-07-30
 
