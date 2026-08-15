@@ -93,15 +93,16 @@ func (c *Client) ScanBytes(ctx context.Context, data []byte) (ScanResult, error)
 // and reintroduce time-of-check/time-of-use concerns).
 //
 // Files larger than the client-side limit fail with ErrSizeLimitExceeded
-// before any connection is made. Only regular files are accepted; the type
-// is checked before opening (so a FIFO path cannot block the open) and
+// before any connection is made. Only regular files are accepted: the type
+// is checked up front, the open is non-blocking on unix so a FIFO swapped
+// in behind that check cannot stall it (ADR-0006), and the type is
 // re-checked race-free on the open descriptor. The file is opened only
 // after a concurrency slot is acquired, so queued scans do not accumulate
 // open descriptors. See Scan for the fail-closed contract.
 func (c *Client) ScanFile(ctx context.Context, path string) (ScanResult, error) {
-	// Pre-open check: os.Open blocks on FIFOs, so reject non-regular
-	// paths before touching them. This is a convenience check; the
-	// authoritative one is the fstat below.
+	// Fast-path check: reject non-regular paths and oversized files
+	// before a scan slot is acquired or anything is opened. Purely a
+	// convenience check; the authoritative one is the fstat below.
 	fi, err := os.Stat(path)
 	if err != nil {
 		return ScanResult{}, fmt.Errorf("clamav: stat scan target: %w", err)
@@ -113,7 +114,7 @@ func (c *Client) ScanFile(ctx context.Context, path string) (ScanResult, error) 
 		return ScanResult{}, serr
 	}
 	defer c.releaseScanSlot()
-	f, err := os.Open(path) // #nosec G304 -- opening the caller-designated scan target is this function's contract
+	f, err := openScanTarget(path)
 	if err != nil {
 		return ScanResult{}, fmt.Errorf("clamav: opening scan target: %w", err)
 	}
