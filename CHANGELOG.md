@@ -12,6 +12,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
   GO-2026-6090 (`crypto/tls`), GO-2026-6089 (`net/http`) and GO-2026-5972
   (`encoding/asn1`). Older local toolchains fetch it automatically via
   `GOTOOLCHAIN=auto`.
+- Reply classification is stricter: a clean verdict is now produced only
+  by the exact reply lines `OK`, `stream: OK`, or `instream (local): OK`
+  (ADR-0005). Previously any `<prefix>: OK` whose prefix contained
+  "stream" (case-insensitively) was accepted; such replies now fail
+  closed as a `ProtocolError`.
 
 ## [0.2.2] - 2026-07-30
 

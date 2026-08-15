@@ -111,6 +111,31 @@ func TestParseScanResponse(t *testing.T) {
 			ScanResponse{Outcome: OutcomeUnknown, Message: "garbage: OK"},
 		},
 		{
+			"uppercase stream prefix is not trusted (ADR-0005)",
+			"STREAM: OK",
+			ScanResponse{Outcome: OutcomeUnknown, Message: "STREAM: OK"},
+		},
+		{
+			"prefix merely containing stream is not trusted (ADR-0005)",
+			"foostream: OK",
+			ScanResponse{Outcome: OutcomeUnknown, Message: "foostream: OK"},
+		},
+		{
+			"multi-word prefix containing stream is not trusted (ADR-0005)",
+			"not a stream: OK",
+			ScanResponse{Outcome: OutcomeUnknown, Message: "not a stream: OK"},
+		},
+		{
+			"leading space breaks the exact match (ADR-0005)",
+			" stream: OK",
+			ScanResponse{Outcome: OutcomeUnknown, Message: " stream: OK"},
+		},
+		{
+			"space before colon breaks the exact match (ADR-0005)",
+			"stream : OK",
+			ScanResponse{Outcome: OutcomeUnknown, Message: "stream : OK"},
+		},
+		{
 			"infected eicar",
 			"stream: Eicar-Signature FOUND",
 			ScanResponse{Outcome: OutcomeInfected, Signature: "Eicar-Signature"},
