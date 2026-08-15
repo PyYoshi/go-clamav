@@ -29,29 +29,34 @@ that has never existed on the wire or in clamd's source.
 
 `OutcomeClean` is produced only by an exact, case-sensitive allowlist of
 reply lines (after the existing trailing `" \t\r\n\x00"` trim):
-`stream: OK` and a bare `OK`. FOUND and ERROR classification stays
+`stream: OK`, which is what clamd's INSTREAM path replies, plus a bare
+`OK` kept for compatibility. FOUND and ERROR classification stays
 suffix-driven. Every other reply remains `OutcomeUnknown`, which the
 client surfaces as a `ProtocolError` (fail-closed).
 
 ## Rationale
 
-- The supported protocol needs exactly one form (`stream: OK`); matching
-  it exactly is the narrowest predicate that keeps working deployments
-  working. This argument was decisive, and it is also why the previously
-  accepted `instream (local): OK` is dropped rather than kept: no clamd
-  emits it, so no deployment depends on it, and an unnecessary entry on a
-  clean-verdict allowlist points the wrong way in a fail-closed control.
+- clamd's INSTREAM path emits exactly one clean form, `stream: OK`;
+  matching it exactly is the narrowest predicate that keeps working
+  deployments working. This argument was decisive, and it is also why the
+  previously accepted `instream (local): OK` is dropped rather than kept:
+  no clamd emits it, so no deployment depends on it, and an unnecessary
+  entry on a clean-verdict allowlist points the wrong way in a
+  fail-closed control.
+- The bare `OK` entry is not a clamd INSTREAM reply either — it is a
+  compatibility entry, not part of the protocol form above. It is kept
+  because it predates this ADR, is already an exact match with no attack
+  surface, and removing documented behavior needs a stronger reason than
+  symmetry.
 - The change can only move replies from "clean" to "protocol error" — a
   strictly fail-closed direction. The residual risk is availability, not
   a wrong verdict, and the required integration matrix (clamd 1.4/1.5
   over unix and TCP) plus the weekly `latest` canary surface real-world
   drift before it reaches users.
-- The bare `OK` entry is kept: it is already an exact match with no
-  attack surface, and removing documented behavior needs a stronger
-  reason than symmetry.
 - This refines the "prefix-agnostic parser" mitigation recorded in
-  ADR-0001 for the OK form only; ADR-0001 itself is a historical record
-  and is not edited beyond a pointer to this ADR.
+  ADR-0001 for the OK form only. ADR-0001 stays a historical record: its
+  original text is left intact and annotated with a dated correction
+  pointing here, rather than rewritten to match what we now know.
 
 ## Considered objections
 
