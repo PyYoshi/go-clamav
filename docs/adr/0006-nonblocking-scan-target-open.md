@@ -35,11 +35,19 @@ remains the authoritative gate that rejects everything non-regular.
   from regular files — so the flag needs no `fcntl` reset after the
   fstat re-check accepts the file. This combination was decisive: one
   flag closes the stall with zero behavior change for legitimate targets.
-- Go runtime detail, verified: `os.OpenFile` with `O_NONBLOCK` attempts
-  netpoll registration; for regular files this fails (Linux `epoll_ctl`
-  returns `EPERM`, kqueue platforms explicitly refuse `S_IFREG`) and the
-  runtime falls back to ordinary blocking file I/O, so `StreamAll` reads
-  behave exactly as before.
+- Go runtime detail, verified empirically: `os.OpenFile` passes the
+  caller's `O_NONBLOCK` through, netpoll registration is attempted and
+  fails for regular files (Linux `epoll_ctl` returns `EPERM`; on
+  darwin/*BSD Go's `os` package declines to register `S_IFREG`/`S_IFDIR`
+  with kqueue at all), and the runtime does **not** clear the flag in
+  that case — it only skips the poller, so reads become plain
+  `syscall.Read` on a still-non-blocking descriptor. `fcntl(F_GETFL)`
+  after such an open still reports `O_NONBLOCK`, while a 5 MiB read
+  completes normally. The change is therefore safe because of the POSIX
+  guarantee above, not because anything neutralized the flag: a
+  non-regular descriptor could surface `EAGAIN`, which the fstat
+  re-check prevents us from ever reading — and which would in any case
+  be a fail-closed error, never a verdict.
 - `syscall.O_NONBLOCK` is provided by the standard library on every GOOS
   matched by `//go:build unix`; the zero-dependency policy (ADR-0003) is
   unaffected.
@@ -61,8 +69,8 @@ remains the authoritative gate that rejects everything non-regular.
 - The `ScanFile` godoc claim becomes true on unix: a FIFO path cannot
   block the open, whether present at the type check or swapped in after.
 - Platform-specific behavior now lives in two small build-tagged files
-  (`scanfile_unix.go`, `scanfile_other.go`); CI builds linux only, so the
-  non-unix file is compile-checked manually (`GOOS=windows go build`)
-  when touched.
+  (`scanfile_unix.go`, `scanfile_other.go`). The `unit` job gains a
+  cross-compile step so the non-unix file cannot rot behind green CI;
+  this is a step in an existing job, not a new CI job.
 - A unit test opens a writer-less FIFO through the helper directly,
   pinning the no-block property against regressions.

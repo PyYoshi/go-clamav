@@ -18,7 +18,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - `ScanFile` can no longer block indefinitely when the target path is
   swapped for a FIFO between the type check and the open: on unix the
   scan target is now opened non-blocking, and the existing descriptor
-  re-check rejects non-regular files (ADR-0006).
+  re-check rejects non-regular files (ADR-0006). Hardening rather than a
+  live exposure — the precondition is write access to the scanned
+  directory.
 
 ## [0.2.2] - 2026-07-30
 
