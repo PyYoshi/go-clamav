@@ -14,47 +14,59 @@ adds no practical attack surface today, but it is wider than the protocol
 requires: a middlebox or an unrelated upstream change could coin an
 accepted form by accident.
 
-The clamd 1.4 source (`clamd/scanner.c`) shows the INSTREAM reply prefix
-is the constant `"stream"` (`reply_fdstr`); the `instream (local)` /
-`instream (<ip>@<port>)` strings are built for internal logging only and
-never appear in wire replies, for every clamd line in support (1.4 LTS,
-1.5, and the canary-tracked `latest`).
+Upstream verification settles what the protocol actually requires. In
+`clamd/scanner.c` (checked on `rel/1.4` and `rel/1.5`), `scanfd()` sets
+`reply_fdstr = "stream"` unconditionally on the INSTREAM path, and the
+clean reply is `conn_reply_single(conn, reply_fdstr, "OK")` — so INSTREAM
+always answers `stream: OK`. The `instream(local)` and
+`instream(<ip>@<port>)` strings built a few lines earlier go only to
+logging, `virusaction()` and the thread-manager task name; they never
+reach a reply. Note also the upstream spelling has no space, while this
+repository's parser, tests and docs carried `instream (local)` — a form
+that has never existed on the wire or in clamd's source.
 
 ## Decision
 
 `OutcomeClean` is produced only by an exact, case-sensitive allowlist of
-reply lines (after the existing trailing `" \t\r\n\x00"` trim): `OK`,
-`stream: OK`, and `instream (local): OK`. FOUND and ERROR classification
-stays suffix-driven. Every other reply remains `OutcomeUnknown`, which the
+reply lines (after the existing trailing `" \t\r\n\x00"` trim):
+`stream: OK` and a bare `OK`. FOUND and ERROR classification stays
+suffix-driven. Every other reply remains `OutcomeUnknown`, which the
 client surfaces as a `ProtocolError` (fail-closed).
 
 ## Rationale
 
 - The supported protocol needs exactly one form (`stream: OK`); matching
   it exactly is the narrowest predicate that keeps working deployments
-  working. This argument was decisive.
+  working. This argument was decisive, and it is also why the previously
+  accepted `instream (local): OK` is dropped rather than kept: no clamd
+  emits it, so no deployment depends on it, and an unnecessary entry on a
+  clean-verdict allowlist points the wrong way in a fail-closed control.
 - The change can only move replies from "clean" to "protocol error" — a
   strictly fail-closed direction. The residual risk is availability, not
   a wrong verdict, and the required integration matrix (clamd 1.4/1.5
   over unix and TCP) plus the weekly `latest` canary surface real-world
   drift before it reaches users.
-- `instream (local): OK` stays as a legacy-compat entry: it was the
-  documented accepted form and keeping it costs nothing.
+- The bare `OK` entry is kept: it is already an exact match with no
+  attack surface, and removing documented behavior needs a stronger
+  reason than symmetry.
 - This refines the "prefix-agnostic parser" mitigation recorded in
   ADR-0001 for the OK form only; ADR-0001 itself is a historical record
-  and is not edited.
+  and is not edited beyond a pointer to this ADR.
 
 ## Considered objections
 
-- Ancient, long-EOL clamd builds derived the reply prefix from `fdstr`,
-  which over IPv4 TCP would have produced `instream (<ip>@<port>): OK`;
-  the allowlist rejects that form. Accepted: those versions are years
-  past EOL and the failure mode is a visible `ProtocolError`, never a
-  wrong verdict.
+- Dropping `instream (local): OK` removes an accepted form. Accepted: it
+  was never a real clamd reply (see Context), so the only way to observe
+  the change is to have been sending a hand-crafted reply, and that now
+  fails closed with a visible `ProtocolError` rather than a clean
+  verdict.
+- Keeping the upstream spelling `instream(local): OK` as a defensive
+  entry was considered and rejected: `fdstr` reaches no reply on the
+  INSTREAM path in any released version, so it would allowlist a second
+  string clamd cannot send.
 - Dropping the bare `OK` entry too was considered (clamd 1.x always
   prefixes INSTREAM replies). Rejected: it is already an exact match with
-  no attack surface, and removing documented behavior needs a stronger
-  reason than symmetry.
+  no attack surface.
 
 ## Consequences
 

@@ -127,9 +127,10 @@ your wrapping code to the same standard. Signature names (e.g.
 
 FOUND and ERROR classification is suffix-driven, which covers the
 signature-name and message drift observed across clamd versions. Clean
-verdicts are stricter: only the exact reply lines `stream: OK`, the legacy
-`instream (local): OK`, or a bare `OK` are accepted (ADR-0005), so any
-drift in the OK form fails closed as a `ProtocolError`. CI pins clamd 1.4
+verdicts are stricter: only the exact reply lines `stream: OK` (what
+clamd's INSTREAM path always replies) and a bare `OK` are accepted
+(ADR-0005), so any drift in the OK form fails closed as a
+`ProtocolError`. CI pins clamd 1.4
 (LTS, supported until 2027-08-15) and 1.5 (current regular release) as
 required checks and tracks `clamav/clamav:latest` in a scheduled canary
 job, so upstream protocol drift surfaces as signal rather than sudden

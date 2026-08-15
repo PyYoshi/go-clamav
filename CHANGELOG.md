@@ -13,10 +13,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
   (`encoding/asn1`). Older local toolchains fetch it automatically via
   `GOTOOLCHAIN=auto`.
 - Reply classification is stricter: a clean verdict is now produced only
-  by the exact reply lines `OK`, `stream: OK`, or `instream (local): OK`
-  (ADR-0005). Previously any `<prefix>: OK` whose prefix contained
-  "stream" (case-insensitively) was accepted; such replies now fail
-  closed as a `ProtocolError`.
+  by the exact reply lines `stream: OK` or `OK` (ADR-0005). Previously
+  any `<prefix>: OK` whose prefix contained "stream"
+  (case-insensitively) was accepted — including `instream (local): OK`,
+  a form no released clamd has ever sent. Such replies now fail closed
+  as a `ProtocolError`.
 
 ## [0.2.2] - 2026-07-30
 

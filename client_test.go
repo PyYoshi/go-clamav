@@ -113,7 +113,7 @@ func TestScanInfectedVariants(t *testing.T) {
 		wantSig string
 	}{
 		{"multi-word signature", "stream: Some sig with spaces FOUND\x00", "Some sig with spaces"},
-		{"legacy prefix", "instream (local): Eicar-Signature FOUND\x00", "Eicar-Signature"},
+		{"unknown prefix still infected", "instream (local): Eicar-Signature FOUND\x00", "Eicar-Signature"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
