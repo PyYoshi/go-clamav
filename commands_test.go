@@ -140,3 +140,20 @@ func TestPingMultilineReply(t *testing.T) {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 }
+
+// TestStatsOversizedBlock pins the multi-line reply bound: a STATS block
+// past proto.MaxBlockResponse is a protocol violation, not something to
+// buffer.
+func TestStatsOversizedBlock(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	fake.SetHandler(clamdtest.RespondWith(strings.Repeat("S", 2<<20) + "\x00"))
+	c := newClient(t, fake.Addr)
+	_, err := c.Stats(context.Background())
+	if err == nil {
+		t.Fatal("2 MiB STATS block accepted; the read bound is missing")
+	}
+	var protoErr *ProtocolError
+	if !errors.As(err, &protoErr) {
+		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
+	}
+}

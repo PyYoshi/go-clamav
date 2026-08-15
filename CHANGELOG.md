@@ -6,6 +6,23 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Adversarial test hardening from the 2026-08 security audit: mid-stream
+  reply scenarios (a FOUND is definitive, an OK for an unfinished stream
+  fails closed, garbage falls through to the transport error), reply-size
+  and client-side size-limit boundary tests (including proof that no
+  connection is dialed for oversized input), an oversized-STATS rejection
+  test, and a slow-drip reply test pinning the documented no-progress
+  deadline semantics. `internal/clamdtest` gains `SetEarlyReply` and
+  `Response.DripInterval` to script these behaviors.
+- Fuzz targets for the bounded reply readers (`FuzzReadLine`,
+  `FuzzReadBlock`) alongside the existing parser fuzz. `make fuzz` and
+  the CI short fuzz pass now run all three via `scripts/fuzz.sh`, which
+  keeps the parser's original budget, gives each reader its own, and
+  fails if a target name no longer resolves (`go test -fuzz` exits 0
+  when its pattern matches nothing).
+
 ### Changed
 
 - Raise the Go toolchain floor to 1.26.6, which carries the fixes for

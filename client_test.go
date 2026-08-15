@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/PyYoshi/go-clamav/internal/clamdtest"
+	"github.com/PyYoshi/go-clamav/internal/proto"
 )
 
 // forEachNetwork runs a subtest against both a unix and a tcp fake.
@@ -615,5 +616,159 @@ func TestErrAlwaysMeansZeroResult(t *testing.T) {
 			t.Errorf("reply %q: nil error with VerdictUnknown result", reply)
 		}
 		fake.Close()
+	}
+}
+
+// The mid-stream tests below script a server that replies while the client
+// is still writing INSTREAM chunks (8 MiB payload, reply after 1 KiB), so
+// the client's next write fails and recoverStreamError must classify the
+// buffered reply. Unix only: closing a TCP socket with unread data can RST
+// the buffered reply away, which is separately handled as a (retryable)
+// connection error.
+
+// TestScanMidStreamFoundIsDefinitive: a detection is a complete verdict
+// even when the stream was never fully sent.
+func TestScanMidStreamFoundIsDefinitive(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	fake.SetEarlyReply(1024, "stream: Evil FOUND\x00")
+	c := newClient(t, fake.Addr, WithMaxStreamSize(NoSizeLimit))
+	res, err := c.Scan(context.Background(), bytes.NewReader(make([]byte, 8<<20)))
+	if err != nil {
+		t.Fatalf("mid-stream detection must be definitive, got error %v", err)
+	}
+	if !res.Infected() || res.Signature != "Evil" {
+		t.Fatalf("res = %+v, want infected with signature Evil", res)
+	}
+}
+
+// TestScanMidStreamOKIsProtocolError: an "OK" for a stream the client never
+// finished sending is inconsistent; trusting it would be fail-open.
+func TestScanMidStreamOKIsProtocolError(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	fake.SetEarlyReply(1024, "stream: OK\x00")
+	c := newClient(t, fake.Addr, WithMaxStreamSize(NoSizeLimit))
+	res, err := c.Scan(context.Background(), bytes.NewReader(make([]byte, 8<<20)))
+	assertFailClosed(t, res, err)
+	var protoErr *ProtocolError
+	if !errors.As(err, &protoErr) {
+		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
+	}
+	if IsRetryable(err) {
+		t.Error("OK-for-unfinished-stream classified as retryable")
+	}
+}
+
+// TestScanMidStreamGarbageIsConnectionError: an unclassifiable mid-stream
+// reply falls through to the transport error — the write failure explains
+// more than the garbage does, and connection errors are retryable.
+func TestScanMidStreamGarbageIsConnectionError(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	fake.SetEarlyReply(1024, "wat\x00")
+	c := newClient(t, fake.Addr, WithMaxStreamSize(NoSizeLimit))
+	res, err := c.Scan(context.Background(), bytes.NewReader(make([]byte, 8<<20)))
+	assertFailClosed(t, res, err)
+	var connErr *ConnectionError
+	if !errors.As(err, &connErr) {
+		t.Fatalf("error = %T(%v), want *ConnectionError", err, err)
+	}
+	if !IsRetryable(err) {
+		t.Error("mid-stream transport failure must be retryable")
+	}
+}
+
+// TestScanReplyAtReadLimitBoundary pins the reply-read bound through the
+// client: exactly proto.MaxLineResponse bytes of content are accepted, one
+// byte more is a protocol violation.
+func TestScanReplyAtReadLimitBoundary(t *testing.T) {
+	mkReply := func(n int) string {
+		const prefix, suffix = "stream: ", " FOUND"
+		body := prefix + strings.Repeat("A", n-len(prefix)-len(suffix)) + suffix
+		if len(body) != n {
+			t.Fatalf("bad reply construction: len = %d, want %d", len(body), n)
+		}
+		return body + "\x00"
+	}
+	t.Run("at limit", func(t *testing.T) {
+		fake := clamdtest.New(t, "unix")
+		fake.SetHandler(clamdtest.RespondWith(mkReply(proto.MaxLineResponse)))
+		c := newClient(t, fake.Addr)
+		res, err := c.Scan(context.Background(), strings.NewReader("x"))
+		if err != nil || !res.Infected() {
+			t.Fatalf("reply of exactly %d bytes rejected: %+v, %v", proto.MaxLineResponse, res, err)
+		}
+		if len(res.Raw) != proto.MaxLineResponse {
+			t.Errorf("len(Raw) = %d, want %d", len(res.Raw), proto.MaxLineResponse)
+		}
+	})
+	t.Run("one over", func(t *testing.T) {
+		fake := clamdtest.New(t, "unix")
+		fake.SetHandler(clamdtest.RespondWith(mkReply(proto.MaxLineResponse + 1)))
+		c := newClient(t, fake.Addr)
+		res, err := c.Scan(context.Background(), strings.NewReader("x"))
+		assertFailClosed(t, res, err)
+		var protoErr *ProtocolError
+		if !errors.As(err, &protoErr) {
+			t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
+		}
+	})
+}
+
+// TestScanBytesSizeLimitBoundary pins the client-side limit off-by-one:
+// one byte over is rejected before any dial, exactly at the limit proceeds
+// to the (failing) dial.
+func TestScanBytesSizeLimitBoundary(t *testing.T) {
+	var dials atomic.Int32
+	c := newClient(t, "tcp://127.0.0.1:1", // never reached
+		WithMaxStreamSize(64),
+		WithDialFunc(func(ctx context.Context, network, addr string) (net.Conn, error) {
+			dials.Add(1)
+			return nil, errors.New("dial refused by test")
+		}))
+	res, err := c.ScanBytes(context.Background(), make([]byte, 65))
+	assertFailClosed(t, res, err)
+	if !errors.Is(err, ErrSizeLimitExceeded) {
+		t.Fatalf("error = %v, want ErrSizeLimitExceeded", err)
+	}
+	if n := dials.Load(); n != 0 {
+		t.Fatalf("oversized input dialed %d times; the limit must reject first", n)
+	}
+	res, err = c.ScanBytes(context.Background(), make([]byte, 64))
+	assertFailClosed(t, res, err)
+	if errors.Is(err, ErrSizeLimitExceeded) {
+		t.Fatalf("error = %v; input exactly at the limit must not be size-rejected", err)
+	}
+	var connErr *ConnectionError
+	if !errors.As(err, &connErr) {
+		t.Fatalf("error = %T(%v), want *ConnectionError from the dial", err, err)
+	}
+	if n := dials.Load(); n != 1 {
+		t.Fatalf("at-limit input dialed %d times, want 1", n)
+	}
+}
+
+// TestScanSlowDripReply pins the documented no-progress deadline semantics
+// (SECURITY.md): a reply dripped one byte per interval makes progress on
+// every read, so it must complete even though the total reply time exceeds
+// the I/O timeout — bounding the total is the caller's context's job.
+func TestScanSlowDripReply(t *testing.T) {
+	const (
+		drip = 50 * time.Millisecond
+		// 10x the drip interval, so a single step stalling on a loaded
+		// runner cannot trip the deadline; the 11-byte reply still takes
+		// ~550ms and clears the assertion below.
+		ioTimeout = 500 * time.Millisecond
+	)
+	fake := clamdtest.New(t, "unix")
+	fake.SetHandler(func(clamdtest.Request) clamdtest.Response {
+		return clamdtest.Response{Data: []byte("stream: OK\x00"), DripInterval: drip}
+	})
+	c := newClient(t, fake.Addr, WithIOTimeout(ioTimeout))
+	start := time.Now()
+	res, err := c.Scan(context.Background(), strings.NewReader("x"))
+	if err != nil || !res.Clean() {
+		t.Fatalf("dripped reply failed: %+v, %v", res, err)
+	}
+	if elapsed := time.Since(start); elapsed < ioTimeout {
+		t.Fatalf("scan finished in %v; the reply cannot have been dripped past the I/O timeout", elapsed)
 	}
 }

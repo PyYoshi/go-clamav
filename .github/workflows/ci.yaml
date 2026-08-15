@@ -28,7 +28,7 @@ jobs:
         run: GOOS=windows go build ./... && GOOS=darwin go build ./...
       - run: go test -race -count=1 ./...
       - name: Short fuzz pass
-        run: go test -run='^$' -fuzz=FuzzParseScanResponse -fuzztime=30s ./internal/proto/
+        run: bash ./scripts/fuzz.sh
 
   lint:
     runs-on: ubuntu-latest

@@ -48,6 +48,12 @@ type Response struct {
 	// Hang, if set, never writes anything and holds the connection open
 	// until the fake shuts down (for I/O timeout tests).
 	Hang bool
+	// DripInterval, if set, writes Data one byte at a time with this
+	// interval between bytes (for no-progress deadline tests: each byte
+	// is progress, so a slow reply must not trip the per-op I/O timeout).
+	// len(Data) * DripInterval must stay well under connSafetyDeadline,
+	// or the connection deadline truncates the reply mid-write.
+	DripInterval time.Duration
 }
 
 // Handler produces the scripted response for one request.
@@ -60,11 +66,18 @@ type Fake struct {
 
 	ln          net.Listener
 	streamLimit atomic.Int64
+	earlyReply  atomic.Pointer[earlyReply]
 	mu          sync.Mutex
 	handler     Handler
 	done        chan struct{}
 	closeOnce   sync.Once
 	wg          sync.WaitGroup
+}
+
+// earlyReply scripts a reply sent while the client is still streaming.
+type earlyReply struct {
+	after int64
+	data  []byte
 }
 
 // New starts a fake clamd on the given network ("unix" or "tcp") and
@@ -124,6 +137,20 @@ func (f *Fake) SetHandler(h Handler) {
 // exceeded. ERROR" and closes the connection without draining the rest of
 // the stream. 0 disables the emulation.
 func (f *Fake) SetStreamLimit(n int64) { f.streamLimit.Store(n) }
+
+// SetEarlyReply makes the fake reply while the client is still streaming:
+// once the accumulated INSTREAM payload exceeds afterBytes, it writes raw
+// (include the trailing NUL yourself) and closes the connection without
+// draining the rest of the stream — the way a real clamd behaves when it
+// reaches a verdict before the client finishes sending. The handler is
+// not invoked for such connections.
+//
+// Set either this or SetStreamLimit, not both: their thresholds are
+// checked on the same chunk boundary and the early reply wins, which
+// makes a test that configures both read as ambiguous.
+func (f *Fake) SetEarlyReply(afterBytes int64, raw string) {
+	f.earlyReply.Store(&earlyReply{after: afterBytes, data: []byte(raw)})
+}
 
 // Close shuts the fake down and waits for connection goroutines to finish.
 // It is idempotent and also registered via t.Cleanup.
@@ -185,6 +212,19 @@ func (f *Fake) handleConn(conn net.Conn) {
 		}
 	}
 	if len(resp.Data) > 0 {
+		if resp.DripInterval > 0 {
+			for _, b := range resp.Data {
+				select {
+				case <-time.After(resp.DripInterval):
+				case <-f.done:
+					return
+				}
+				if _, err := conn.Write([]byte{b}); err != nil {
+					return
+				}
+			}
+			return
+		}
 		_, _ = conn.Write(resp.Data)
 	}
 }
@@ -233,6 +273,12 @@ func (f *Fake) readChunks(conn net.Conn, br *bufio.Reader) (body []byte, ok bool
 			return nil, false
 		}
 		body = append(body, chunk...)
+		if er := f.earlyReply.Load(); er != nil && int64(len(body)) > er.after {
+			// Mimic clamd reaching a verdict mid-stream: reply, then
+			// close (via the caller's defer) without reading the rest.
+			_, _ = conn.Write(er.data)
+			return nil, false
+		}
 		if limit > 0 && int64(len(body)) > limit {
 			// Mimic clamd: reply, then close (via the caller's defer)
 			// without reading the rest of the stream. The client's next
