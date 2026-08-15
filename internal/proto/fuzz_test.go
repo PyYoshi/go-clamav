@@ -1,6 +1,8 @@
 package proto
 
 import (
+	"bufio"
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -49,6 +51,63 @@ func FuzzParseScanResponse(f *testing.F) {
 		}
 		if got.Outcome == OutcomeInfected && !strings.HasSuffix(trimmed, " FOUND") {
 			t.Fatalf("infected verdict without FOUND suffix: %q", line)
+		}
+	})
+}
+
+// FuzzReadLine checks the bounded single-line reader: it must never panic,
+// and every successfully returned line must respect the invariants the
+// classifier depends on — bounded length and no embedded terminators.
+func FuzzReadLine(f *testing.F) {
+	seeds := [][]byte{
+		[]byte("PONG\x00"),
+		[]byte("stream: OK\x00garbage"),
+		[]byte("stream: OK\nEvil FOUND\x00"),
+		[]byte("PONG\r\n"),
+		[]byte(""),
+		[]byte("\x00"),
+		append(bytes.Repeat([]byte{'A'}, MaxLineResponse), 0),
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		line, err := ReadLine(bufio.NewReader(bytes.NewReader(data)), MaxLineResponse)
+		if err != nil {
+			return
+		}
+		if len(line) > MaxLineResponse {
+			t.Fatalf("line exceeds the read bound: %d bytes", len(line))
+		}
+		if strings.ContainsAny(line, "\r\n\x00") {
+			t.Fatalf("line contains an embedded terminator: %q", line)
+		}
+	})
+}
+
+// FuzzReadBlock checks the bounded multi-line reader: no panics, and a
+// successful read is bounded and NUL-free.
+func FuzzReadBlock(f *testing.F) {
+	seeds := [][]byte{
+		[]byte("POOLS: 1\nTHREADS: live 1\nEND\x00"),
+		[]byte("STATE: ok\n"),
+		[]byte(""),
+		[]byte("\x00"),
+		append(bytes.Repeat([]byte{'B'}, MaxBlockResponse), 0),
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		block, err := ReadBlock(bufio.NewReader(bytes.NewReader(data)), MaxBlockResponse)
+		if err != nil {
+			return
+		}
+		if len(block) > MaxBlockResponse {
+			t.Fatalf("block exceeds the read bound: %d bytes", len(block))
+		}
+		if strings.ContainsRune(block, 0) {
+			t.Fatalf("block contains NUL: %q", block)
 		}
 	})
 }

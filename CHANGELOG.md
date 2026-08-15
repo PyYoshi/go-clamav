@@ -18,6 +18,20 @@ project adheres to [Semantic Versioning](https://semver.org/).
   "stream" (case-insensitively) was accepted; such replies now fail
   closed as a `ProtocolError`.
 
+### Added
+
+- Adversarial test hardening from the 2026-08 security audit: mid-stream
+  reply scenarios (a FOUND is definitive, an OK for an unfinished stream
+  fails closed, garbage falls through to the transport error), reply-size
+  and client-side size-limit boundary tests (including proof that no
+  connection is dialed for oversized input), an oversized-STATS rejection
+  test, and a slow-drip reply test pinning the documented no-progress
+  deadline semantics. `internal/clamdtest` gains `SetEarlyReply` and
+  `Response.DripInterval` to script these behaviors.
+- Fuzz targets for the bounded reply readers (`FuzzReadLine`,
+  `FuzzReadBlock`) alongside the existing parser fuzz; `make fuzz` and
+  the CI short fuzz pass now run all three.
+
 ## [0.2.2] - 2026-07-30
 
 ### Added
