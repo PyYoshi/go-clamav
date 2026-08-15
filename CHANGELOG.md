@@ -6,6 +6,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the Go toolchain floor to 1.26.6, which carries the fixes for
+  GO-2026-6090 (`crypto/tls`), GO-2026-6089 (`net/http`) and GO-2026-5972
+  (`encoding/asn1`). Older local toolchains fetch it automatically via
+  `GOTOOLCHAIN=auto`.
+
 ## [0.2.1] - 2026-07-24
 
 ### Changed
