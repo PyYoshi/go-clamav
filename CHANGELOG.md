@@ -18,6 +18,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
   govulncheck is pinned to a release version in CI and the Makefile
   instead of `@latest` (the vulnerability database is still fetched live
   at scan time).
+- Reply classification is stricter: a clean verdict is now produced only
+  by the exact reply lines `stream: OK` or `OK` (ADR-0005). Previously
+  any `<prefix>: OK` whose prefix contained "stream"
+  (case-insensitively) was accepted — including `instream (local): OK`,
+  a form no released clamd has ever sent. Such replies now fail closed
+  as a `ProtocolError`.
 
 ## [0.2.2] - 2026-07-30
 

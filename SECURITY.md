@@ -38,8 +38,9 @@ Design properties relied on:
 
 - **Fail-closed:** every failure path returns the zero `ScanResult`
   (`VerdictUnknown`); unknown replies are `ProtocolError`s, never verdicts.
-  `VerdictClean` is produced only by the OK reply forms INSTREAM actually
-  emits: a bare `OK`, or `<prefix>: OK` where the prefix contains "stream".
+  `VerdictClean` is produced only by an exact allowlist of OK reply lines:
+  `stream: OK` (what clamd's INSTREAM path always replies) or a bare `OK`
+  (ADR-0005).
 - **Bounded resources:** reply reads are capped (4 KiB line / 1 MiB block),
   each read/write carries a no-progress deadline, streams are size-limited
   client-side (default 25 MiB) *before* bytes are sent, and a partial
