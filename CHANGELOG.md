@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-23
+
 ### Added
 
 - Adversarial test hardening from the 2026-08 security audit: mid-stream
@@ -178,7 +180,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
   SECURITY.md threat model, ADR-0001, operations guide, runnable examples
   (`basicscan`, `httpupload`).
 
-[Unreleased]: https://github.com/PyYoshi/go-clamav/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/PyYoshi/go-clamav/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/PyYoshi/go-clamav/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/PyYoshi/go-clamav/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/PyYoshi/go-clamav/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PyYoshi/go-clamav/compare/v0.1.0...v0.2.0
