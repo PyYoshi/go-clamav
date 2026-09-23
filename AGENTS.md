@@ -114,6 +114,8 @@ Critical — report these first:
 
 Also check:
 
+- Credentials or tokens in the diff (gitleaks also scans the whole
+  history in the `lint` job).
 - Blocking I/O that ignores the context, and goroutine leaks.
 - Tests that are timing-dependent or race under `-race`.
 - godoc and comments in English; a `CHANGELOG.md` `[Unreleased]` entry for

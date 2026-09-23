@@ -38,13 +38,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - CodeRabbit is retired. Its review contract now lives in the Review
   checklist in AGENTS.md, and every PR gets an independent review against
   it before merging. The workflow checks CodeRabbit used to run now run in
-  the required `lint` job: actionlint (also in `make lint`) and zizmor.
-  A separate `zizmor-sarif` job, the only one with `security-events:
-  write`, also uploads the zizmor audit to code scanning; it does not
-  gate, since zizmor exits 0 with SARIF output. Secret scanning remains
-  covered by GitHub's secret scanning with push protection; YAML and
-  Markdown style linting is dropped. Dependabot now waits 7 days before
-  proposing a new version (security updates are not delayed).
+  the required `lint` job: gitleaks over the whole git history,
+  actionlint (both also in `make lint`) and zizmor. A separate
+  `zizmor-sarif` job, the only one with `security-events: write`, also
+  uploads the zizmor audit to code scanning; it does not gate, since
+  zizmor exits 0 with SARIF output. YAML and Markdown style linting is
+  dropped. Dependabot now waits 7 days before proposing a new version
+  (security updates are not delayed).
 - Reply classification is stricter: a clean verdict is now produced only
   by the exact reply lines `stream: OK` or `OK` (ADR-0005). Previously
   any `<prefix>: OK` whose prefix contained "stream"

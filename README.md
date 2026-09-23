@@ -157,7 +157,7 @@ freshness, overload behavior) is covered in
 make test          # unit tests + race detector (no Docker needed)
 make integration   # starts dockerized clamd, runs integration suite
 make fuzz          # short fuzzing pass over the reply parser
-make lint          # golangci-lint (security-heavy config) + govulncheck + actionlint
+make lint          # golangci-lint (security-heavy config) + govulncheck + actionlint + gitleaks
 make format        # gofumpt + gci formatting (via golangci-lint fmt)
 ```
 
