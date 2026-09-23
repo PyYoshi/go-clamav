@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -351,6 +353,160 @@ type failReader struct{ err error }
 
 func (r *failReader) Read([]byte) (int, error) { return 0, r.err }
 
+// TestScanTruncatedSource: a source cut short must fail the scan. net/http
+// and mime/multipart report a truncated request body as io.ErrUnexpectedEOF;
+// streaming that as a complete INSTREAM would return a verdict for an
+// upload the caller never fully received.
+func TestScanTruncatedSource(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	var handled atomic.Bool
+	fake.SetHandler(func(req clamdtest.Request) clamdtest.Response {
+		handled.Store(true)
+		return clamdtest.DefaultHandler(req)
+	})
+	c := newClient(t, fake.Addr)
+	r := io.MultiReader(strings.NewReader("partial upload"), &failReader{err: io.ErrUnexpectedEOF})
+	res, err := c.Scan(context.Background(), r)
+	assertFailClosed(t, res, err)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("error = %v, want the source's io.ErrUnexpectedEOF in the chain", err)
+	}
+	if IsRetryable(err) {
+		t.Error("truncated source classified as retryable (input is consumed)")
+	}
+	fake.Close() // wait for the connection handler so handled is final
+	if handled.Load() {
+		t.Error("clamd received a complete INSTREAM for a truncated source")
+	}
+}
+
+// TestScanSizeLimitBeatsSourceError: http.MaxBytesReader fails in the same
+// chunk that crosses the client-side limit when its cap sits just above
+// it. The scan must still report ErrSizeLimitExceeded (a 413 for the
+// caller), not a generic source failure.
+func TestScanSizeLimitBeatsSourceError(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	c := newClient(t, fake.Addr, WithMaxStreamSize(1024))
+	body := http.MaxBytesReader(nil, io.NopCloser(bytes.NewReader(make([]byte, 4096))), 1025)
+	res, err := c.Scan(context.Background(), body)
+	assertFailClosed(t, res, err)
+	if !errors.Is(err, ErrSizeLimitExceeded) {
+		t.Fatalf("error = %v, want ErrSizeLimitExceeded", err)
+	}
+}
+
+// cancelingReader cancels the scan during its first Read and then keeps
+// delivering one byte per call without ever blocking, like a trickling
+// upload. The call cap turns a regression into a failure, not a hang.
+type cancelingReader struct {
+	cancel context.CancelFunc
+	calls  int
+}
+
+func (r *cancelingReader) Read(p []byte) (int, error) {
+	r.calls++
+	if r.calls == 1 {
+		r.cancel()
+	}
+	if r.calls > 1000 {
+		return 0, errors.New("source still read long after cancellation")
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+	p[0] = 'x'
+	return 1, nil
+}
+
+// cancelOnFailReader fails the way a net/http request body does when the
+// client disconnects: the server cancels the request context before the
+// failing Read returns io.ErrUnexpectedEOF.
+type cancelOnFailReader struct{ cancel context.CancelFunc }
+
+func (r *cancelOnFailReader) Read([]byte) (int, error) {
+	r.cancel()
+	return 0, io.ErrUnexpectedEOF
+}
+
+// TestScanSourceErrorBeatsItsOwnCancellation: when the source fails on its
+// own, its error is the cause even if ctx is done by the time the scan
+// classifies it. Otherwise every truncated or timed-out HTTP upload would
+// read as a plain cancellation and lose the cause callers match on.
+func TestScanSourceErrorBeatsItsOwnCancellation(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	c := newClient(t, fake.Addr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	res, err := c.Scan(ctx, &cancelOnFailReader{cancel: cancel})
+	assertFailClosed(t, res, err)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("error = %v, want the source's io.ErrUnexpectedEOF in the chain", err)
+	}
+	if IsRetryable(err) {
+		t.Error("source failure classified as retryable")
+	}
+}
+
+// TestScanCancelStopsSourceReads: ctx is checked before every Read on the
+// source, so a scan cancelled while its source trickles data stops reading
+// at once, instead of after filling a whole chunk (32 KiB of one-byte
+// reads here) while holding its scan slot and clamd connection.
+func TestScanCancelStopsSourceReads(t *testing.T) {
+	fake := clamdtest.New(t, "unix")
+	c := newClient(t, fake.Addr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	src := &cancelingReader{cancel: cancel}
+	res, err := c.Scan(ctx, src)
+	assertFailClosed(t, res, err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+	if !strings.Contains(err.Error(), "scan aborted") {
+		t.Errorf("error = %q, want the cancellation reported as an aborted scan, not a source failure", err)
+	}
+	if src.calls != 1 {
+		t.Errorf("source read %d times, want 1 (no Read after cancellation)", src.calls)
+	}
+}
+
+// TestScanUnterminatedReply pins ADR-0007: z-form replies always end with
+// a NUL, so a reply that ends at EOF may be cut short and must never yield
+// a clean verdict. clamd writes each reply and its NUL together, so this
+// marks a non-conforming peer: a non-retryable ProtocolError, as for any
+// other reply outside the grammar. A detection still counts: it can only
+// reject.
+func TestScanUnterminatedReply(t *testing.T) {
+	for _, reply := range []string{"stream: OK", "OK", "stream: OK\n"} {
+		t.Run(fmt.Sprintf("%q", reply), func(t *testing.T) {
+			fake := clamdtest.New(t, "unix")
+			fake.SetHandler(clamdtest.RespondWith(reply))
+			c := newClient(t, fake.Addr)
+			res, err := c.Scan(context.Background(), strings.NewReader("x"))
+			assertFailClosed(t, res, err)
+			var protoErr *ProtocolError
+			if !errors.As(err, &protoErr) {
+				t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
+			}
+			if IsRetryable(err) {
+				t.Error("unterminated reply classified as retryable")
+			}
+		})
+	}
+	t.Run("detection still counts", func(t *testing.T) {
+		fake := clamdtest.New(t, "unix")
+		fake.SetHandler(clamdtest.RespondWith("stream: Evil FOUND"))
+		c := newClient(t, fake.Addr)
+		res, err := c.Scan(context.Background(), strings.NewReader("x"))
+		if err != nil {
+			t.Fatalf("Scan() error = %v", err)
+		}
+		if !res.Infected() || res.Signature != "Evil" {
+			t.Errorf("result = %+v, want infected with signature Evil", res)
+		}
+	})
+}
+
 func TestScanIOTimeout(t *testing.T) {
 	fake := clamdtest.New(t, "unix")
 	fake.SetHandler(func(clamdtest.Request) clamdtest.Response {
@@ -602,7 +758,7 @@ func TestErrAlwaysMeansZeroResult(t *testing.T) {
 		"garbage\x00",
 		"", // close without reply
 		"\x00",
-		"stream: OK", // missing terminator, then EOF — still parsed OK; not an error case but harmless
+		"stream: OK", // missing terminator, then EOF — incomplete, so an error (ADR-0007)
 	}
 	for _, reply := range replies {
 		fake := clamdtest.New(t, "unix")

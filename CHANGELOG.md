@@ -41,6 +41,22 @@ project adheres to [Semantic Versioning](https://semver.org/).
   (case-insensitively) was accepted — including `instream (local): OK`,
   a form no released clamd has ever sent. Such replies now fail closed
   as a `ProtocolError`.
+- A clean verdict now also requires a complete reply: an INSTREAM `OK`
+  that ends at EOF instead of its NUL terminator fails as a
+  `ProtocolError` rather than reading as clean — a cut-short detection
+  reply could otherwise have looked like one (ADR-0007). clamd always
+  NUL-terminates z-form replies, so conforming servers are unaffected.
+- `Scan` checks its context before every `Read` on the source, so a
+  cancelled scan stops reading a trickling source at once instead of
+  after filling a whole chunk, and reports the cancellation. A source
+  that fails on its own is still reported with its own error even when
+  the context is done by then (net/http cancels the request context
+  when a body read fails), so truncations and read timeouts stay
+  matchable with `errors.Is`. A `Read` that blocks still cannot be
+  interrupted: the `Scan` godoc, README, docs/operations.md and
+  SECURITY.md now say so and show how to bound slow sources.
+- The README error table lists input errors (a failing or truncated
+  reader, an unusable `ScanFile` path), which are never retryable.
 
 ### Fixed
 
@@ -50,6 +66,22 @@ project adheres to [Semantic Versioning](https://semver.org/).
   re-check rejects non-regular files (ADR-0006). Hardening rather than a
   live exposure — the precondition is write access to the scanned
   directory.
+- `Scan` no longer treats a source's own `io.ErrUnexpectedEOF` as end of
+  input. net/http and mime/multipart report a truncated request body that
+  way, so a cut-short upload was streamed to clamd as complete and could
+  come back clean; it now fails with the source error and no INSTREAM
+  terminator is sent. Only `io.EOF` ends a stream, and an error returned
+  together with the bytes that complete a chunk is no longer dropped.
+  Input past the client-side limit is still reported as
+  `ErrSizeLimitExceeded` when the source fails in the same chunk (e.g.
+  `http.MaxBytesReader`). A source that keeps returning `(0, nil)` now
+  fails with `io.ErrNoProgress` instead of spinning forever, and one that
+  reports an impossible read count fails instead of panicking.
+- `examples/httpupload` now sets `http.Server.ReadTimeout`, so a client
+  trickling its upload can no longer pin a goroutine and the multipart
+  parser's memory indefinitely. It answers `408` when the body times out
+  and `400 incomplete upload` when the client disconnects mid-body,
+  instead of reporting a missing form field.
 
 ## [0.2.2] - 2026-07-30
 

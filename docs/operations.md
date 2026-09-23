@@ -60,6 +60,13 @@ Client/server alignment rules:
 - The client's `WithIOTimeout` (default 30s) bounds *stalls*; the context
   you pass bounds the *whole scan*. Large archives can legitimately take
   tens of seconds — size scan contexts accordingly (the examples use 2m).
+- Neither bounds reads from *your* source. `Scan` cannot interrupt a
+  blocked `Read` on the reader you pass, and meanwhile the scan keeps its
+  `WithMaxConcurrentScans` slot and its clamd connection (clamd's
+  `ReadTimeout` eventually drops the idle stream). Bound slow sources
+  yourself — for HTTP uploads, set `http.Server.ReadTimeout` as
+  `examples/httpupload` does, or use
+  `http.ResponseController.SetReadDeadline` per request.
 
 ## Signature freshness
 
@@ -130,7 +137,10 @@ signature-name and message drift observed across clamd versions. Clean
 verdicts are stricter: only the exact reply lines `stream: OK` (what
 clamd's INSTREAM path always replies) and a bare `OK` are accepted
 (ADR-0005), so any drift in the OK form fails closed as a
-`ProtocolError`. CI pins clamd 1.4
+`ProtocolError`. The same holds for an OK that ends at EOF instead of its
+NUL terminator (ADR-0007): clamd always sends the NUL, so a peer in front
+of clamd that drops it — a proxy behind `WithDialFunc`, an emulator —
+turns every clean scan into a `ProtocolError`. CI pins clamd 1.4
 (LTS, supported until 2027-08-15) and 1.5 (current regular release) as
 required checks and tracks `clamav/clamav:latest` in a scheduled canary
 job, so upstream protocol drift surfaces as signal rather than sudden

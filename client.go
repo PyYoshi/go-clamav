@@ -65,7 +65,17 @@ func New(addr string, opts ...Option) (*Client, error) {
 // clean. A VerdictInfected result is a successful scan, not an error.
 //
 // r is consumed exactly once and is not replayed on failure; see IsRetryable
-// for which errors are worth retrying with a fresh reader.
+// for which errors are worth retrying with a fresh reader. Only io.EOF ends
+// the input: any other error from r — including io.ErrUnexpectedEOF, which
+// net/http returns for a truncated request body — fails the scan, as does a
+// reader that keeps returning (0, nil) (io.ErrNoProgress).
+//
+// ctx is checked before every Read on r, but it cannot interrupt a Read
+// that blocks: cancellation takes effect once the Read in progress
+// returns. Until then the call keeps its concurrency slot
+// (WithMaxConcurrentScans) and its clamd connection, so bound slow sources
+// yourself — for request bodies, with http.Server.ReadTimeout or
+// http.ResponseController.SetReadDeadline.
 func (c *Client) Scan(ctx context.Context, r io.Reader) (ScanResult, error) {
 	if r == nil {
 		return ScanResult{}, errors.New("clamav: nil reader")
@@ -181,14 +191,15 @@ func (c *Client) scanStream(ctx context.Context, r io.Reader) (ScanResult, error
 	if _, werr := dc.Write(proto.EncodeCommand("INSTREAM")); werr != nil {
 		return ScanResult{}, wrapWriteErr(ctx, werr)
 	}
-	if _, streamErr := proto.StreamAll(dc, r, c.cfg.chunkSize, c.cfg.maxStreamSize); streamErr != nil {
+	src := &ctxReader{ctx: ctx, r: r}
+	if _, streamErr := proto.StreamAll(dc, src, c.cfg.chunkSize, c.cfg.maxStreamSize); streamErr != nil {
 		return c.recoverStreamError(ctx, dc, br, streamErr)
 	}
-	line, err := proto.ReadLine(br, proto.MaxLineResponse)
+	line, terminated, err := proto.ReadLine(br, proto.MaxLineResponse)
 	if err != nil {
 		return ScanResult{}, wrapReadErr(ctx, "INSTREAM", err)
 	}
-	return resultFromLine(line)
+	return resultFromLine(line, terminated)
 }
 
 // recoverStreamError classifies a failure that happened while streaming
@@ -202,9 +213,18 @@ func (c *Client) recoverStreamError(ctx context.Context, dc *deadlineConn, br *b
 		return ScanResult{}, fmt.Errorf("%w: input exceeds client-side limit of %d bytes (WithMaxStreamSize)",
 			ErrSizeLimitExceeded, c.cfg.maxStreamSize)
 	}
-	// The caller's reader failed; clamd is not involved.
 	var srcErr *proto.SourceError
 	if errors.As(streamErr, &srcErr) {
+		// ctxReader stopped reading because the scan was cancelled.
+		var aborted *sourceAbortedError
+		if errors.As(srcErr.Err, &aborted) {
+			return ScanResult{}, fmt.Errorf("clamav: scan aborted: %w", aborted.err)
+		}
+		// The caller's reader failed on its own; clamd is not involved.
+		// Its error is the cause even if ctx is done by now: net/http
+		// cancels the request context when a body read fails, and
+		// reporting that cancellation would hide the truncation or
+		// timeout callers need to see.
 		return ScanResult{}, fmt.Errorf("clamav: reading scan source: %w", srcErr.Err)
 	}
 	// Write failure. Context errors take priority: a cancelled scan must
@@ -218,7 +238,9 @@ func (c *Client) recoverStreamError(ctx context.Context, dc *deadlineConn, br *b
 	// try to collect it — briefly: if a reply exists it is already in
 	// flight.
 	dc.ioTimeout = min(dc.ioTimeout, 2*time.Second)
-	if line, rerr := proto.ReadLine(br, proto.MaxLineResponse); rerr == nil {
+	// Whether the reply was NUL-terminated does not matter here: an OK is
+	// rejected either way, and FOUND/ERROR can only reject.
+	if line, _, rerr := proto.ReadLine(br, proto.MaxLineResponse); rerr == nil {
 		switch resp := proto.ParseScanResponse(line); resp.Outcome {
 		case proto.OutcomeError:
 			return ScanResult{}, clamdErrorFrom(resp)
@@ -242,11 +264,46 @@ func (c *Client) recoverStreamError(ctx context.Context, dc *deadlineConn, br *b
 	return ScanResult{}, wrapWriteErr(ctx, streamErr)
 }
 
+// ctxReader checks the context before every Read on the caller's source.
+// A Read that blocks still cannot be interrupted, but a source that keeps
+// delivering data — however slowly — stops being read once the scan is
+// cancelled, rather than only after a whole chunk has been filled.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c *ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, &sourceAbortedError{err: err}
+	}
+	return c.r.Read(p)
+}
+
+// sourceAbortedError marks a Read that ctxReader refused because the scan
+// was cancelled, so recoverStreamError can tell the library's own stop
+// apart from a source that failed by itself.
+type sourceAbortedError struct{ err error }
+
+func (e *sourceAbortedError) Error() string { return e.err.Error() }
+func (e *sourceAbortedError) Unwrap() error { return e.err }
+
 // resultFromLine maps a parsed verdict line to the public API. Unknown
-// replies are protocol errors, never verdicts.
-func resultFromLine(line string) (ScanResult, error) {
+// replies are protocol errors, never verdicts. terminated reports whether
+// the reply ended at its NUL terminator (see proto.ReadLine).
+func resultFromLine(line string, terminated bool) (ScanResult, error) {
 	switch resp := proto.ParseScanResponse(line); resp.Outcome {
 	case proto.OutcomeClean:
+		if !terminated {
+			// The reply ended at EOF instead of the NUL that ends every
+			// z-form reply, so this OK may be the start of a longer reply
+			// cut short. A clean verdict needs a complete reply (ADR-0007).
+			// clamd sends each reply and its NUL in one write, so this
+			// points at a non-conforming peer rather than a transient
+			// failure. FOUND and ERROR need no such check: they can only
+			// reject.
+			return ScanResult{}, &ProtocolError{Command: "INSTREAM", Response: "(OK reply without NUL terminator)"}
+		}
 		return ScanResult{Verdict: VerdictClean, Raw: line}, nil
 	case proto.OutcomeInfected:
 		return ScanResult{Verdict: VerdictInfected, Signature: resp.Signature, Raw: line}, nil
