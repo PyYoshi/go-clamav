@@ -64,15 +64,19 @@ through pull requests.
    (signing is automatic via repo config; the commit-msg hook enforces the
    trailer rule).
 3. Push the branch and open a PR (`gh pr create`); fill in the template
-   checklist — it mirrors the Definition of Done in AGENTS.md.
+   checklist — it mirrors the Definition of Done in AGENTS.md, plus the
+   review in step 5 (tick that item once the review is done).
 4. Wait for the required checks: `unit`, `lint`, `integration (1.4)`,
    `integration (1.5)`.
-5. CodeRabbit reviews every PR (in Japanese, with request-changes enabled —
-   its CHANGES_REQUESTED state blocks merging):
-   - address findings and push fixes;
-   - when rejecting a finding, reply on its thread with the reason;
-   - once every finding is handled, comment `@coderabbitai resolve` on the
-     PR — CodeRabbit re-checks and posts an approving review.
+5. Get an independent review: before merging, a reviewer other than the
+   author — the maintainer, or a separate review run such as a fresh
+   reviewer agent or Codex `adversarial-review` — reviews the diff against
+   the Review checklist in AGENTS.md:
+   - address valid findings and push fixes, then have the fixes reviewed
+     too — the review must cover the commit that is merged;
+   - when rejecting a finding, reply in the PR with the reason;
+   - record the reviewed commit in the PR, and merge only once every
+     finding, whatever its severity, is fixed or answered.
 6. Merge with a merge commit: `gh pr merge --merge --delete-branch`
    (squash/rebase merges are disabled so commit signatures survive).
 

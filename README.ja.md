@@ -154,7 +154,7 @@ clamdのプロトコルは**認証なしの平文**です。アドレスはセ�
 make test          # ユニットテスト+レース検出(Docker不要)
 make integration   # Docker上のclamdを起動して統合テストを実行
 make fuzz          # 応答パーサの短時間ファジング
-make lint          # golangci-lint(セキュリティ強め設定)+ govulncheck
+make lint          # golangci-lint(セキュリティ強め設定)+ govulncheck + actionlint + gitleaks
 make format        # gofumpt + gci による整形(golangci-lint fmt経由)
 ```
 

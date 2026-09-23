@@ -36,6 +36,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # full history: gitleaks scans every commit
       - name: EICAR plaintext guard
         run: bash ./scripts/check-eicar.sh tracked
       - name: Zero-dependency policy (ADR-0003)
@@ -56,6 +57,46 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           govulncheck ./...
+      # Checks that previously ran only inside CodeRabbit. They are steps of
+      # this required job, so a finding blocks the merge.
+      - name: gitleaks (secrets in any commit)
+        # Scans the whole history, so a secret committed and later removed
+        # in the same PR is still caught; findings are printed redacted.
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.30.1
+          gitleaks git --redact --no-banner --verbose
+      - name: actionlint (workflow syntax, expressions, shellcheck)
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          actionlint
+      - name: zizmor (GitHub Actions security audit)
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          # This is the gating run: report in the job log and as PR
+          # annotations and fail the job on findings. The zizmor-sarif job
+          # uploads the same audit to code scanning, which cannot gate:
+          # with SARIF output zizmor exits 0 even when it finds something.
+          advanced-security: false
+          annotations: true
+
+  # Uploads the zizmor audit to code scanning (Security tab) for alert
+  # tracking. The only job with security-events: write, so the lint job
+  # stays read-only; merge gating is the zizmor step in lint.
+  zizmor-sarif:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # check out the workflows to audit
+      security-events: write # upload the SARIF results to code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: zizmor (upload to code scanning)
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          advanced-security: true
 
   # Required: pinned ClamAV versions. 1.4 is the LTS default (EOL
   # 2027-08-15), 1.5 the current regular release. 1.0 was dropped at its

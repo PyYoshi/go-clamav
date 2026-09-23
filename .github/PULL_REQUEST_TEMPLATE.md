@@ -10,3 +10,4 @@
 - [ ] `README.md` and `README.ja.md` updated together, or the change touches neither
 - [ ] `CHANGELOG.md` updated under `[Unreleased]` for user-visible changes
 - [ ] No new dependencies, no assembled EICAR string, no weakened guards; design changes reference an ADR
+- [ ] Reviewed against the AGENTS.md Review checklist by someone other than the author, covering the merged commit (recorded in the PR); every finding fixed or answered

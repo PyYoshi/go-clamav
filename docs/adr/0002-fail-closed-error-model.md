@@ -54,3 +54,7 @@ Every error path is fail-closed, mechanically:
 - Tests must assert the zero result on every error path; the review
   contract (.coderabbit.yaml, AGENTS.md) treats any deviation as a
   critical defect.
+
+  *Note (2026-09-23): CodeRabbit was retired and `.coderabbit.yaml`
+  removed; its review contract now lives in the Review checklist in
+  AGENTS.md. The original text is left as written.*

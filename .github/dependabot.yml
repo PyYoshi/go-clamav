@@ -1,17 +1,26 @@
 # Dependabot: weekly checks for the Go module (currently stdlib-only, but
 # this also covers future additions), GitHub Actions pins, and the ClamAV
 # image references in the compose file.
+#
+# Every ecosystem waits 7 days before proposing a newly published version,
+# so a compromised release has time to be caught upstream before it lands
+# here (zizmor's dependabot-cooldown audit). Cooldown applies to version
+# updates only; security updates are not delayed.
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
 
   # Note: the clamd image is referenced as ${CLAMAV_IMAGE:-clamav/clamav:1.4}.
   # If Dependabot cannot parse the env-default form, remove this entry —
@@ -20,3 +29,5 @@ updates:
     directory: "/docker"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
