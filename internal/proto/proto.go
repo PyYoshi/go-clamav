@@ -23,12 +23,21 @@ const (
 	// size. Callers are expected to validate configuration upfront; this is
 	// a defensive fallback only.
 	DefaultChunkSize = 32 << 10 // 32 KiB
+
+	// maxConsecutiveEmptyReads bounds how many (0, nil) reads in a row the
+	// source may return before StreamAll gives up with io.ErrNoProgress,
+	// mirroring bufio.Reader.
+	maxConsecutiveEmptyReads = 100
 )
 
 // ErrSizeLimitExceeded is returned by StreamAll when the source would exceed
 // the configured byte limit. The chunk that would cross the limit is not
 // written to the sink.
 var ErrSizeLimitExceeded = errors.New("stream size limit exceeded")
+
+// errInvalidRead reports a source that returned a byte count outside
+// [0, len(p)], violating the io.Reader contract.
+var errInvalidRead = errors.New("source returned an invalid read count")
 
 // SourceError wraps a failure to read from the caller-supplied data source
 // (e.g. the io.Reader passed to Scan). It never indicates a clamd problem.
@@ -69,9 +78,13 @@ func EncodeCommand(name string) []byte {
 // offending chunk and returns ErrSizeLimitExceeded, so no truncated payload
 // is ever presented to clamd as a complete stream.
 //
-// Read failures are wrapped in *SourceError, write failures in *SinkError.
-// On any error the zero-length terminator is NOT written; the caller must
-// close the connection so clamd cannot treat a partial stream as complete.
+// Only io.EOF from the source ends the stream. Any other read failure —
+// including a source's own io.ErrUnexpectedEOF, which is how net/http and
+// mime/multipart report a truncated body — is wrapped in *SourceError, as
+// are sources that stop making progress or return impossible counts. Write
+// failures are wrapped in *SinkError. On any error the zero-length
+// terminator is NOT written; the caller must close the connection so clamd
+// cannot treat a partial stream as complete.
 func StreamAll(w io.Writer, r io.Reader, chunkSize int, maxBytes int64) (int64, error) {
 	if chunkSize <= 0 {
 		chunkSize = DefaultChunkSize
@@ -82,11 +95,20 @@ func StreamAll(w io.Writer, r io.Reader, chunkSize int, maxBytes int64) (int64, 
 	buf := make([]byte, chunkHeaderSize+chunkSize)
 	var total int64
 	for {
-		n, rerr := io.ReadFull(r, buf[chunkHeaderSize:])
+		n, eof, rerr := fill(r, buf[chunkHeaderSize:])
+		// The size limit is checked first, so input that exceeds it is
+		// reported as oversized even when the source also failed (e.g.
+		// http.MaxBytesReader erroring just past the limit).
+		if maxBytes >= 0 && total+int64(n) > maxBytes {
+			return total, ErrSizeLimitExceeded
+		}
+		if rerr != nil {
+			// The input is incomplete: sending the bytes already buffered
+			// would only waste bandwidth on a stream that is never
+			// terminated.
+			return total, &SourceError{Err: rerr}
+		}
 		if n > 0 {
-			if maxBytes >= 0 && total+int64(n) > maxBytes {
-				return total, ErrSizeLimitExceeded
-			}
 			// #nosec G115 -- n <= chunkSize <= MaxChunkSize (16 MiB), cannot overflow uint32
 			binary.BigEndian.PutUint32(buf[:chunkHeaderSize], uint32(n))
 			if wn, werr := w.Write(buf[:chunkHeaderSize+n]); werr != nil {
@@ -96,11 +118,8 @@ func StreamAll(w io.Writer, r io.Reader, chunkSize int, maxBytes int64) (int64, 
 			}
 			total += int64(n)
 		}
-		if rerr != nil {
-			if rerr == io.EOF || errors.Is(rerr, io.ErrUnexpectedEOF) {
-				break
-			}
-			return total, &SourceError{Err: rerr}
+		if eof {
+			break
 		}
 	}
 	binary.BigEndian.PutUint32(buf[:chunkHeaderSize], 0)
@@ -110,4 +129,36 @@ func StreamAll(w io.Writer, r io.Reader, chunkSize int, maxBytes int64) (int64, 
 		return total, &SinkError{Err: io.ErrShortWrite}
 	}
 	return total, nil
+}
+
+// fill reads from r until buf is full or r reports io.EOF. It replaces
+// io.ReadFull, whose io.ErrUnexpectedEOF for a short final read is
+// indistinguishable from the same sentinel returned by the source itself
+// for truncated input: here only io.EOF ends the input, and every other
+// error is returned as-is. A source that keeps returning (0, nil) fails
+// with io.ErrNoProgress instead of spinning forever, and a count outside
+// [0, len(p)] fails with errInvalidRead instead of panicking.
+func fill(r io.Reader, buf []byte) (n int, eof bool, err error) {
+	empty := 0
+	for n < len(buf) {
+		nn, rerr := r.Read(buf[n:])
+		if nn < 0 || nn > len(buf)-n {
+			return n, false, errInvalidRead
+		}
+		n += nn
+		switch {
+		case rerr == io.EOF:
+			return n, true, nil
+		case rerr != nil:
+			return n, false, rerr
+		case nn > 0:
+			empty = 0
+		default:
+			empty++
+			if empty >= maxConsecutiveEmptyReads {
+				return n, false, io.ErrNoProgress
+			}
+		}
+	}
+	return n, false, nil
 }

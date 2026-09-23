@@ -109,6 +109,7 @@ func FuzzReadLine(f *testing.F) {
 		{64, []byte("stream: OK\x00garbage")},
 		{64, []byte("stream: OK\nEvil FOUND\x00")},
 		{64, []byte("PONG\r\n")},
+		{64, []byte("stream: OK")}, // cut short before the NUL
 		{1, []byte("")},
 		{1, []byte("\x00")},
 		{3, append(bytes.Repeat([]byte{'A'}, 4), 0)},   // exactly at the 4-byte bound
@@ -121,13 +122,19 @@ func FuzzReadLine(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, maxSeed uint16, data []byte) {
 		max := fuzzMax(maxSeed)
-		line, err := ReadLine(bufio.NewReader(bytes.NewReader(data)), max)
+		line, terminated, err := ReadLine(bufio.NewReader(bytes.NewReader(data)), max)
 		assertBoundEnforced(t, data, max, len(line), err)
 		if err != nil {
 			return
 		}
 		if strings.ContainsAny(line, "\r\n\x00") {
 			t.Fatalf("line contains an embedded terminator: %q", line)
+		}
+		// terminated is what a clean verdict depends on (ADR-0007): it
+		// must be reported exactly when the reply ended at a NUL, never
+		// for a reply cut short by EOF.
+		if hasNUL := bytes.IndexByte(data, 0) >= 0; terminated != hasNUL {
+			t.Fatalf("terminated = %v for input %q (contains NUL: %v)", terminated, data, hasNUL)
 		}
 	})
 }

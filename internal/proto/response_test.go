@@ -12,37 +12,41 @@ func br(s string) *bufio.Reader { return bufio.NewReader(strings.NewReader(s)) }
 
 func TestReadLine(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr error
+		name           string
+		input          string
+		want           string
+		wantTerminated bool
+		wantErr        error
 	}{
-		{"NUL terminated", "PONG\x00", "PONG", nil},
-		{"newline terminated", "PONG\n", "PONG", nil},
-		{"CRLF terminated", "PONG\r\n", "PONG", nil},
-		{"EOF after data", "PONG", "PONG", nil},
-		{"EOF no data", "", "", io.EOF},
-		{"empty line NUL", "\x00", "", nil},
-		{"stops at first terminator", "stream: OK\x00garbage", "stream: OK", nil},
-		{"trailing newline before NUL tolerated", "PONG\n\x00", "PONG", nil},
-		{"embedded newline rejected", "stream: OK\nEvil FOUND\x00", "", ErrMalformedReply},
-		{"embedded CR rejected", "stream: OK\rjunk\x00", "", ErrMalformedReply},
+		{"NUL terminated", "PONG\x00", "PONG", true, nil},
+		{"newline terminated", "PONG\n", "PONG", false, nil},
+		{"CRLF terminated", "PONG\r\n", "PONG", false, nil},
+		{"EOF after data", "PONG", "PONG", false, nil},
+		{"EOF no data", "", "", false, io.EOF},
+		{"empty line NUL", "\x00", "", true, nil},
+		{"stops at first terminator", "stream: OK\x00garbage", "stream: OK", true, nil},
+		{"trailing newline before NUL tolerated", "PONG\n\x00", "PONG", true, nil},
+		{"embedded newline rejected", "stream: OK\nEvil FOUND\x00", "", false, ErrMalformedReply},
+		{"embedded CR rejected", "stream: OK\rjunk\x00", "", false, ErrMalformedReply},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ReadLine(br(tt.input), MaxLineResponse)
+			got, terminated, err := ReadLine(br(tt.input), MaxLineResponse)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("error = %v, want %v", err, tt.wantErr)
 			}
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
+			if terminated != tt.wantTerminated {
+				t.Errorf("terminated = %v, want %v", terminated, tt.wantTerminated)
+			}
 		})
 	}
 }
 
 func TestReadLineTooLarge(t *testing.T) {
-	_, err := ReadLine(br(strings.Repeat("a", 100)+"\x00"), 10)
+	_, _, err := ReadLine(br(strings.Repeat("a", 100)+"\x00"), 10)
 	if !errors.Is(err, ErrResponseTooLarge) {
 		t.Fatalf("error = %v, want ErrResponseTooLarge", err)
 	}

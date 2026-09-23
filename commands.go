@@ -29,7 +29,11 @@ func (c *Client) command(ctx context.Context, name string, block bool) (string, 
 	if block {
 		reply, rerr = proto.ReadBlock(br, proto.MaxBlockResponse)
 	} else {
-		reply, rerr = proto.ReadLine(br, proto.MaxLineResponse)
+		// Admin replies carry no verdict, so a reply that ends at EOF
+		// instead of its NUL is still accepted here (unlike INSTREAM's
+		// clean verdict, ADR-0007); expectReply still demands an exact
+		// match where one is defined.
+		reply, _, rerr = proto.ReadLine(br, proto.MaxLineResponse)
 	}
 	if rerr != nil {
 		return "", wrapReadErr(ctx, name, rerr)

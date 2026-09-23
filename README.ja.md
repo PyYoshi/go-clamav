@@ -17,7 +17,9 @@ English version: [README.md](README.md)
 - **構造的にfail-closed。** エラーがクリーン判定と混同されることは型の上であり得ず、
   サイズ超過の入力は送信前に拒否され、解釈できない応答は推測せずエラーになります。
 - **context対応。** すべての呼び出しが `context.Context` のキャンセル・デッドラインを
-  ストリーミング途中でも尊重します。
+  ストリーミング途中でも尊重します。唯一contextで中断できないのは、`Scan` に渡した
+  リーダーの `Read` がブロックしている間です。リクエストボディなど遅い入力元は
+  呼び出し側で制限してください(例: `http.Server.ReadTimeout`)。
 - **DoS耐性。** 応答読み取りの上限、操作単位のI/Oタイムアウト、クライアント側
   サイズ上限、任意の並行数キャップを備えます。
 
@@ -111,7 +113,7 @@ func (c *Client) Reload(ctx context.Context) error            // 管理用。ス
 
 ### エラー
 
-失敗は必ず次の4形態のいずれかで返ります。`errors.Is/As` で分類してください:
+スキャンの失敗は次のいずれかの形で返ります。`errors.Is/As` で分類してください:
 
 | エラー                 | 意味                                             | `IsRetryable` |
 | ---------------------- | ------------------------------------------------ | ------------- |
@@ -120,6 +122,7 @@ func (c *Client) Reload(ctx context.Context) error            // 管理用。ス
 | `*ProtocolError`       | 分類不能な応答(fail-closed)                    | いいえ        |
 | `*ConnectionError`     | dial/read/writeのトランスポート障害              | はい          |
 | context起因            | `context.Canceled` / `DeadlineExceeded` をラップ | いいえ / はい |
+| 入力エラー             | 渡したリーダーの失敗(途中で切れたアップロードの `io.ErrUnexpectedEOF` など)、または `ScanFile` がパスを扱えない。**未スキャン**。元の原因があればラップされ `errors.Is` で判定可能 | いいえ |
 
 ライブラリは自動リトライを行いません。`io.Reader` は再読み込みできず、暗黙の
 リトライは大きなアップロードを二重送信するためです。`IsRetryable(err)` を判定し、

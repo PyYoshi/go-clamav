@@ -10,6 +10,9 @@
 //
 //	200 accepted            (scan completed, clean)
 //	400 malware detected    (scan completed, signature matched)
+//	400 incomplete upload   (client disconnected mid-body)
+//	400 missing field       (no multipart field "file")
+//	408 upload timed out    (body not received within the server's ReadTimeout)
 //	413 file too large      (client- or server-side size limit)
 //	503 scan unavailable    (verdict unknown; Retry-After set when retryable)
 package main
@@ -18,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -66,6 +70,13 @@ func main() {
 		Addr:              *listen,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
+		// Bound the body read too. The scan context cannot: FormFile
+		// reads the body before Scan runs, and Scan itself cannot
+		// interrupt a blocked Read on its source. Without this a client
+		// trickling its upload pins a goroutine and the multipart
+		// parser's memory indefinitely. Size it for your slowest
+		// legitimate uploader.
+		ReadTimeout: 2 * time.Minute,
 	}
 	if err := server.ListenAndServe(); err != nil {
 		logger.Error("server stopped", "error", err)
@@ -89,11 +100,18 @@ func uploadHandler(scanner *clamav.Client, logger *slog.Logger) http.HandlerFunc
 		file, header, err := r.FormFile("file")
 		if err != nil {
 			var tooLarge *http.MaxBytesError
-			if errors.As(err, &tooLarge) {
+			switch {
+			case errors.As(err, &tooLarge):
 				http.Error(w, "file too large to scan", http.StatusRequestEntityTooLarge)
-				return
+			case errors.Is(err, os.ErrDeadlineExceeded):
+				// The server's ReadTimeout expired mid-body.
+				http.Error(w, "upload timed out", http.StatusRequestTimeout)
+			case errors.Is(err, io.ErrUnexpectedEOF):
+				// The client stopped sending mid-body.
+				http.Error(w, "incomplete upload", http.StatusBadRequest)
+			default:
+				http.Error(w, "missing multipart field 'file'", http.StatusBadRequest)
 			}
-			http.Error(w, "missing multipart field 'file'", http.StatusBadRequest)
 			return
 		}
 		defer file.Close()

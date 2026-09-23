@@ -19,7 +19,9 @@ from the type system up.
   clean verdict, oversized inputs are rejected before they are streamed, and
   replies the client cannot parse are errors — never guesses.
 - **Context-aware.** Every call honors `context.Context` cancellation and
-  deadlines, including mid-stream.
+  deadlines, including mid-stream. The one thing a context cannot interrupt
+  is a blocked `Read` on the reader you pass to `Scan`: bound slow sources
+  such as request bodies yourself (e.g. `http.Server.ReadTimeout`).
 - **DoS-resistant.** Bounded reply reads, per-operation I/O timeouts, a
   client-side stream size limit, and an optional concurrency cap.
 
@@ -114,7 +116,7 @@ connection, matching clamd's one-command-per-connection session model.
 
 ### Errors
 
-All failures arrive as one of four shapes; classify with `errors.Is/As`:
+Scan failures arrive in one of these shapes; classify with `errors.Is/As`:
 
 | Error                  | Meaning                                        | `IsRetryable` |
 | ---------------------- | ---------------------------------------------- | ------------- |
@@ -123,6 +125,7 @@ All failures arrive as one of four shapes; classify with `errors.Is/As`:
 | `*ProtocolError`       | Unclassifiable reply (fail-closed)             | no            |
 | `*ConnectionError`     | Dial/read/write transport failure              | yes           |
 | ctx cancellation       | Wrapped `context.Canceled` / `DeadlineExceeded`| no / yes      |
+| Input error            | Your reader failed (e.g. `io.ErrUnexpectedEOF` for a truncated upload) or `ScanFile` could not use the path; **not scanned**; any underlying cause is wrapped for `errors.Is` | no |
 
 The library never retries on its own: an `io.Reader` cannot be replayed and
 silent retries would double-stream uploads. Use `IsRetryable(err)` and

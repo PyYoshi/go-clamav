@@ -29,7 +29,7 @@ Trust boundaries assumed by the library:
 
 | Component                  | Trust assumption                                        |
 | -------------------------- | ------------------------------------------------------- |
-| Scanned data (`io.Reader`) | **Untrusted.** Malicious content, unbounded size, failing/slow readers |
+| Scanned data (`io.Reader`) | **Untrusted.** Malicious content, unbounded size, failing or truncated readers; slow or blocking readers must be bounded by the caller |
 | Network path to clamd      | Semi-trusted availability-wise: may fail or stall at any time; replies are bounded and strictly parsed |
 | clamd itself               | Trusted for verdicts. If your clamd is compromised, verdicts are meaningless — the library cannot defend against that |
 | Configuration (address, limits) | Trusted deployment input. **Never derive the address from request data** |
@@ -40,14 +40,19 @@ Design properties relied on:
   (`VerdictUnknown`); unknown replies are `ProtocolError`s, never verdicts.
   `VerdictClean` is produced only by an exact allowlist of OK reply lines:
   `stream: OK` (what clamd's INSTREAM path always replies) or a bare `OK`
-  (ADR-0005).
+  (ADR-0005), and only from a complete reply that ends at its NUL
+  terminator (ADR-0007).
 - **Bounded resources:** reply reads are capped (4 KiB line / 1 MiB block),
   each read/write carries a no-progress deadline, streams are size-limited
   client-side (default 25 MiB) *before* bytes are sent, and a partial
-  stream is never terminated as if complete. The per-operation deadline
+  stream is never terminated as if complete — only `io.EOF` from the
+  source ends a stream; any other source error, including a truncated
+  body's `io.ErrUnexpectedEOF`, fails the scan. The per-operation deadline
   bounds stalls, not totals: a server dripping one byte per interval can
   stretch a reply read to (reply cap × I/O timeout), so callers must bound
-  total scan time with a context deadline, as every example does.
+  total scan time with a context deadline, as every example does. Reads
+  from the caller's own source are the caller's to bound: a blocked `Read`
+  cannot be interrupted by the library (see docs/operations.md).
 - **No content exposure:** scanned bytes are never logged, stored, or
   embedded in error messages; errors carry classification and metadata only.
 - **Protocol hygiene:** clamd is a hard trust dependency, so the protocol

@@ -29,25 +29,31 @@ var ErrMalformedReply = errors.New("multi-line reply to a single-line command")
 
 // ReadLine reads a single-line response terminated by NUL (z-format), up to
 // max bytes of content. Trailing '\r' and '\n' are trimmed, but an embedded
-// newline fails with ErrMalformedReply. EOF after at least one byte returns
-// the data read so far (clamd may close the connection right after
-// replying); EOF with no data is returned as io.EOF so callers can classify
-// "closed without response".
-func ReadLine(br *bufio.Reader, max int) (string, error) {
+// newline fails with ErrMalformedReply.
+//
+// terminated reports whether the reply ended at its NUL. EOF after at least
+// one byte returns the data read so far with terminated == false: callers
+// that tolerate a close right after the payload may use it, but clamd
+// always sends the NUL in z form, so the data may be a reply cut short and
+// must not yield a clean verdict (ADR-0007). EOF with no data is returned
+// as io.EOF so callers can classify "closed without response".
+func ReadLine(br *bufio.Reader, max int) (line string, terminated bool, err error) {
 	buf := make([]byte, 0, 64)
 	for {
-		b, err := br.ReadByte()
-		if err != nil {
-			if err == io.EOF && len(buf) > 0 {
-				return finishLine(string(buf))
+		b, rerr := br.ReadByte()
+		if rerr != nil {
+			if rerr == io.EOF && len(buf) > 0 {
+				line, err = finishLine(string(buf))
+				return line, false, err
 			}
-			return "", err
+			return "", false, rerr
 		}
 		if b == 0 {
-			return finishLine(string(buf))
+			line, err = finishLine(string(buf))
+			return line, err == nil, err
 		}
 		if len(buf) >= max {
-			return "", ErrResponseTooLarge
+			return "", false, ErrResponseTooLarge
 		}
 		buf = append(buf, b)
 	}
