@@ -6,6 +6,8 @@ GOLANGCI_LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lin
 
 GOVULNCHECK_VERSION ?= v1.7.0
 
+ACTIONLINT_VERSION ?= v1.7.12
+
 .PHONY: test
 test: ## Unit tests (no Docker required)
 	$(GO) vet ./...
@@ -54,9 +56,10 @@ setup: ## One-time developer setup: enable git hooks, check tooling
 	@command -v jq >/dev/null 2>&1 || echo "WARNING: jq not found; Claude Code guard hooks are inert without it."
 
 .PHONY: lint
-lint: ## Static analysis (golangci-lint + govulncheck)
+lint: ## Static analysis (golangci-lint + govulncheck + actionlint)
 	$(GOLANGCI_LINT) run
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+	$(GO) run github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VERSION)
 
 .PHONY: format
 format: ## Format code with gofumpt + gci (via golangci-lint fmt)

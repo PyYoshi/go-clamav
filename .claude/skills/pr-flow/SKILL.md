@@ -1,13 +1,14 @@
 ---
 name: pr-flow
-description: Land current changes on main via the required PR workflow of this repository — feature branch, signed commits, required checks, CodeRabbit review handling, merge-commit merge. Use when asked to open a PR, ship/land changes, or merge work into main.
+description: Land current changes on main via the required PR workflow of this repository — feature branch, signed commits, required checks, independent review, merge-commit merge. Use when asked to open a PR, ship/land changes, or merge work into main.
 ---
 
 # PR flow for PyYoshi/go-clamav
 
-`main` only accepts merge commits from PRs with green required checks and a
-non-blocking CodeRabbit review. Follow the steps in order; never bypass a
-step with `--no-verify`, force pushes or `gh pr merge --admin`.
+`main` only accepts signed merge commits from PRs with green required
+checks, and every PR gets an independent review before it is merged. Follow
+the steps in order; never bypass a step with `--no-verify`, force pushes or
+`gh pr merge --admin`.
 
 ## 1. Before committing
 
@@ -43,17 +44,22 @@ gh pr checks --watch
 Required: `unit`, `lint`, `integration (1.4)`, `integration (1.5)`. Fix
 failures and push; never merge around them.
 
-## 5. Handle CodeRabbit
+## 5. Independent review
 
-CodeRabbit reviews in Japanese with request-changes enabled; its
-CHANGES_REQUESTED review blocks the merge (mergeStateStatus=BLOCKED).
+No bot review gates the merge, so this step is where the PR gets reviewed.
+Have the diff reviewed against the Review checklist in AGENTS.md by a
+reviewer that is not the session that wrote it: the maintainer, or a
+separate review run such as a fresh reviewer agent or Codex
+`adversarial-review` (pass the checklist as its focus text).
 
-- Address valid findings, push the fixes.
-- For findings you reject, reply on the finding's thread with the concrete
-  reason (never resolve silently).
-- When every finding is handled, comment on the PR:
-  `@coderabbitai resolve` — CodeRabbit re-checks and posts an approving
-  review; the merge state becomes CLEAN.
+- Address valid findings and push the fixes; the required checks rerun,
+  and the fixes go back to the reviewer — the review must cover the commit
+  that is merged.
+- For findings you reject, reply in the PR with the concrete reason (never
+  drop one silently).
+- Record the reviewed commit SHA in the PR. Merge only once every finding,
+  whatever its severity, is fixed or answered, then tick the review item
+  in the PR checklist.
 
 ## 6. Merge and clean up
 

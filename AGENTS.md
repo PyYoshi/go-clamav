@@ -38,9 +38,9 @@ Changing any of these is a defect, not a refactor:
    scanned data.
 
 These invariants are enforced in layers: tests, CI, git hooks, Claude Code
-hooks, CodeRabbit path instructions and GitHub rulesets. **Weakening a
-guard layer (disabling a hook, deleting a check, softening an instruction)
-is itself a critical defect.**
+hooks, the independent review against the Review checklist below, and
+GitHub rulesets. **Weakening a guard layer (disabling a hook, deleting a
+check, softening an instruction) is itself a critical defect.**
 
 ## Definition of Done
 
@@ -72,6 +72,63 @@ Humans decide design; agents implement it. **Stop and ask the maintainer
 Accepted designs are recorded as `docs/adr/NNNN-title.md`
 (start from `docs/adr/template.md`).
 
+## Review checklist
+
+Every PR is reviewed against this list before it is merged, by a reviewer
+other than its author: the maintainer, or a separate review run such as a
+fresh reviewer agent or Codex `adversarial-review`. Valid findings are
+fixed; a rejected finding is answered in the PR with the reason. No bot
+review gates the merge, so this review is the only one a PR gets:
+
+- it must cover the commit that is merged — fixes pushed after a review
+  go back to the reviewer, and the PR records the reviewed commit;
+- a PR is merged only once every finding, whatever its severity, is fixed
+  or answered with a reason.
+
+Critical — report these first:
+
+- A path that returns a non-zero `ScanResult` together with `err != nil`
+  (invariant 1).
+- A change that lets an unclassifiable clamd reply become `VerdictClean`,
+  or relaxes the reply classification in `internal/proto`: the
+  FOUND > ERROR > OK priority, the prefix-agnostic suffix matching of
+  FOUND and ERROR, the exact OK allowlist (ADR-0005), clean verdicts only
+  from a NUL-terminated reply (ADR-0007), or unknown replies mapping to
+  `OutcomeUnknown` (invariant 2).
+- Relaxed or removed reply-read bounds, I/O deadlines or client-side size
+  limit (invariant 3).
+- A change that could present a partial stream to clamd as complete: the
+  INSTREAM terminator handling, including any source error other than
+  `io.EOF` treated as end of input (invariant 4).
+- A `require` in `go.mod` or any other non-stdlib dependency (invariant 5).
+- The complete 68-byte EICAR string in the repository, or the
+  hex-assembled EICAR pattern in `scripts/` turned into a plaintext
+  constant (invariant 6).
+- Scanned content in error messages or logs (invariant 7).
+- A weakened guard: an invariant, the Definition of Done, the design gate
+  or the git rules in this file deleted or relaxed; a hook in `.claude/`
+  or `githooks/` disabled or relaxed (changed to exit 0, detection patterns
+  or block targets removed, wiring or the Stop hook removed, including the
+  `Co-Authored-By` and EICAR checks); a check in `scripts/` removed,
+  relaxed or made fail-open.
+
+Also check:
+
+- Blocking I/O that ignores the context, and goroutine leaks.
+- Tests that are timing-dependent or race under `-race`.
+- godoc and comments in English; a `CHANGELOG.md` `[Unreleased]` entry for
+  user-visible behavior changes; `README.md` and `README.ja.md` changed
+  together.
+- Changes to this file kept consistent with `CLAUDE.md` (which imports
+  it) and `CONTRIBUTING.md`.
+- `.github/`: actions pinned to commit SHAs and minimal `permissions`
+  (actionlint and zizmor also check workflows in the `lint` job); a
+  renamed CI job (`unit`, `lint`, `integration (1.4)`,
+  `integration (1.5)`) renamed in the branch ruleset's required checks
+  too.
+- `docker/`: clamd.conf limits such as `StreamMaxLength` consistent with
+  the expectations in `integration_test.go`.
+
 ## Git rules
 
 - **Never** add `Co-Authored-By` or other attribution trailers to commits.
@@ -79,26 +136,23 @@ Accepted designs are recorded as `docs/adr/NNNN-title.md`
   verify with `git log --format='%h %G?'` (expect `G`).
 - Never push to `main`. Work on a feature branch, open a PR, wait for the
   four required checks (`unit`, `lint`, `integration (1.4)`,
-  `integration (1.5)`) and CodeRabbit, then merge with a merge commit
-  (`gh pr merge --merge --delete-branch`). Squash and rebase merges are
-  disabled to preserve signatures.
+  `integration (1.5)`) and the independent review (see Review checklist),
+  then merge with a merge commit (`gh pr merge --merge --delete-branch`).
+  Squash and rebase merges are disabled to preserve signatures.
 - Never use `--no-verify`, `--no-gpg-sign`, force pushes,
   `gh pr merge --admin`, or `core.hooksPath` overrides.
 - Run `make setup` once per clone to enable the repository git hooks.
 
-See CONTRIBUTING.md for the full pull-request and CodeRabbit workflow.
+See CONTRIBUTING.md for the full pull-request and review workflow.
 
 ## Language policy
 
 - Everything that becomes part of the repository or its history is written
   in **English**: code, comments, godoc, documentation, ADRs, CHANGELOG
   entries, commit messages, and pull-request titles and descriptions.
-- Exceptions: `README.ja.md` (the Japanese mirror of `README.md`) and the
-  Japanese instruction text in `.coderabbit.yaml` (review output is
-  deliberately ja-JP).
+- Exception: `README.ja.md` (the Japanese mirror of `README.md`).
 - Interaction language is not fixed: conversations with AI assistants and
-  review-thread discussions follow the participants' preference (e.g.
-  CodeRabbit reviews and replies to it are typically in Japanese).
+  review discussions follow the participants' preference.
 
 ## Commands
 
