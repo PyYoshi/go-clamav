@@ -191,9 +191,7 @@ func TestIntegration(t *testing.T) {
 				var wg sync.WaitGroup
 				errs := make([]error, 16)
 				for i := range errs {
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
+					wg.Go(func() {
 						payload := make([]byte, 256<<10)
 						if _, err := rand.Read(payload); err != nil {
 							errs[i] = err
@@ -204,7 +202,7 @@ func TestIntegration(t *testing.T) {
 							err = errors.New("random payload not clean: " + res.Raw)
 						}
 						errs[i] = err
-					}()
+					})
 				}
 				wg.Wait()
 				for i, err := range errs {

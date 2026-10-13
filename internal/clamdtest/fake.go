@@ -175,12 +175,10 @@ func (f *Fake) serve() {
 		if err != nil {
 			return // listener closed
 		}
-		f.wg.Add(1)
-		go func() {
-			defer f.wg.Done()
+		f.wg.Go(func() {
 			defer conn.Close()
 			f.handleConn(conn)
-		}()
+		})
 	}
 }
 

@@ -130,8 +130,7 @@ func TestStreamAllSourceError(t *testing.T) {
 	boom := errors.New("boom")
 	var sink bytes.Buffer
 	_, err := StreamAll(&sink, &failingReader{err: boom}, 4, -1)
-	var srcErr *SourceError
-	if !errors.As(err, &srcErr) {
+	if _, ok := errors.AsType[*SourceError](err); !ok {
 		t.Fatalf("error = %T(%v), want *SourceError", err, err)
 	}
 	if !errors.Is(err, boom) {
@@ -201,8 +200,7 @@ func TestStreamAllTruncatedSource(t *testing.T) {
 				var sink bytes.Buffer
 				src := &truncatedReader{data: s.data, err: srcErr, withData: s.withData, once: s.once}
 				_, err := StreamAll(&sink, src, 4, -1)
-				var se *SourceError
-				if !errors.As(err, &se) {
+				if _, ok := errors.AsType[*SourceError](err); !ok {
 					t.Fatalf("error = %T(%v), want *SourceError", err, err)
 				}
 				if !errors.Is(err, io.ErrUnexpectedEOF) {
@@ -354,8 +352,7 @@ func (w *failingWriter) Write(p []byte) (int, error) {
 func TestStreamAllSinkError(t *testing.T) {
 	boom := errors.New("broken pipe")
 	_, err := StreamAll(&failingWriter{failAfter: 0, err: boom}, strings.NewReader("abc"), 4, -1)
-	var sinkErr *SinkError
-	if !errors.As(err, &sinkErr) {
+	if _, ok := errors.AsType[*SinkError](err); !ok {
 		t.Fatalf("error = %T(%v), want *SinkError", err, err)
 	}
 	if !errors.Is(err, boom) {
@@ -367,8 +364,7 @@ func TestStreamAllSinkErrorOnTerminator(t *testing.T) {
 	// 4-byte header + 3 payload bytes succeed; the 4-byte terminator fails.
 	boom := errors.New("broken pipe")
 	n, err := StreamAll(&failingWriter{failAfter: 7, err: boom}, strings.NewReader("abc"), 4, -1)
-	var sinkErr *SinkError
-	if !errors.As(err, &sinkErr) {
+	if _, ok := errors.AsType[*SinkError](err); !ok {
 		t.Fatalf("error = %T(%v), want *SinkError", err, err)
 	}
 	if n != 3 {
