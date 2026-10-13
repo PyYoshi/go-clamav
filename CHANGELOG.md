@@ -11,12 +11,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Require Go 1.27: the toolchain floor moves from 1.26.6 to 1.27.2, which
   carries the fixes for GO-2026-6603, GO-2026-6611, GO-2026-6612,
   GO-2026-6613 and GO-2026-6617 (`net/http`), GO-2026-6607 (`crypto/tls`)
-  and GO-2026-6608 (`mime/multipart`). Go 1.26 is no longer supported;
-  modules that depend on go-clamav need `go 1.27.2` or later, and older
-  local toolchains fetch it automatically via `GOTOOLCHAIN=auto`. No
-  library behavior changes: the one Go 1.27 change near this code
-  (`net.UnixConn` packet reads returning a bare `io.EOF`) does not reach
-  the stream reads the reply readers use.
+  and GO-2026-6608 (`net/textproto`, `mime/multipart`). Go 1.26 is no
+  longer supported; modules that depend on go-clamav need `go 1.27.2` or
+  later, and older local toolchains fetch it automatically via
+  `GOTOOLCHAIN=auto`. No library behavior changes: the one Go 1.27 change
+  near this code (`net.UnixConn` packet reads returning a bare `io.EOF`)
+  does not reach the stream reads the reply readers use.
 - golangci-lint is updated to v2.14.0 in CI and the Makefile. v2.12.2
   cannot load Go 1.27 export data, so `make lint` failed on any Go 1.27
   toolchain.
