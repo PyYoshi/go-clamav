@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
 ### Changed
 
 - Require Go 1.27: the toolchain floor moves from 1.26.6 to 1.27.2, which
@@ -20,9 +22,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - golangci-lint is updated to v2.14.0 in CI and the Makefile. v2.12.2
   cannot load Go 1.27 export data, so `make lint` failed on any Go 1.27
   toolchain.
-- CI jobs run on `ubuntu-26.04` instead of `ubuntu-latest`, so the Ubuntu
-  release CI runs on changes only through an edit to the CI workflow, not
-  when GitHub moves the `ubuntu-latest` label. `.github/actionlint.yaml`
+- CI jobs run on `ubuntu-26.04` instead of `ubuntu-latest`, so CI moves to
+  a new Ubuntu release only through an edit to the CI workflow, not when
+  GitHub moves the `ubuntu-latest` label. `.github/actionlint.yaml`
   registers the label, which actionlint v1.7.12 does not know yet.
 
 ## [0.3.0] - 2026-09-23
@@ -199,7 +201,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
   SECURITY.md threat model, ADR-0001, operations guide, runnable examples
   (`basicscan`, `httpupload`).
 
-[Unreleased]: https://github.com/PyYoshi/go-clamav/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/PyYoshi/go-clamav/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/PyYoshi/go-clamav/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/PyYoshi/go-clamav/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/PyYoshi/go-clamav/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/PyYoshi/go-clamav/compare/v0.2.0...v0.2.1
