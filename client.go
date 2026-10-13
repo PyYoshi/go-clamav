@@ -213,11 +213,9 @@ func (c *Client) recoverStreamError(ctx context.Context, dc *deadlineConn, br *b
 		return ScanResult{}, fmt.Errorf("%w: input exceeds client-side limit of %d bytes (WithMaxStreamSize)",
 			ErrSizeLimitExceeded, c.cfg.maxStreamSize)
 	}
-	var srcErr *proto.SourceError
-	if errors.As(streamErr, &srcErr) {
+	if srcErr, ok := errors.AsType[*proto.SourceError](streamErr); ok {
 		// ctxReader stopped reading because the scan was cancelled.
-		var aborted *sourceAbortedError
-		if errors.As(srcErr.Err, &aborted) {
+		if aborted, ok := errors.AsType[*sourceAbortedError](srcErr.Err); ok {
 			return ScanResult{}, fmt.Errorf("clamav: scan aborted: %w", aborted.err)
 		}
 		// The caller's reader failed on its own; clamd is not involved.
@@ -257,8 +255,7 @@ func (c *Client) recoverStreamError(ctx context.Context, dc *deadlineConn, br *b
 			// garbage reply does.
 		}
 	}
-	var sinkErr *proto.SinkError
-	if errors.As(streamErr, &sinkErr) {
+	if sinkErr, ok := errors.AsType[*proto.SinkError](streamErr); ok {
 		return ScanResult{}, wrapWriteErr(ctx, sinkErr.Err)
 	}
 	return ScanResult{}, wrapWriteErr(ctx, streamErr)

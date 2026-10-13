@@ -140,8 +140,7 @@ func TestScanClamdError(t *testing.T) {
 	c := newClient(t, fake.Addr)
 	res, err := c.Scan(context.Background(), strings.NewReader("x"))
 	assertFailClosed(t, res, err)
-	var clamdErr *ClamdError
-	if !errors.As(err, &clamdErr) {
+	if _, ok := errors.AsType[*ClamdError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ClamdError", err, err)
 	}
 	if errors.Is(err, ErrSizeLimitExceeded) {
@@ -158,8 +157,7 @@ func TestScanUnknownResponse(t *testing.T) {
 	c := newClient(t, fake.Addr)
 	res, err := c.Scan(context.Background(), strings.NewReader("x"))
 	assertFailClosed(t, res, err)
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
+	if _, ok := errors.AsType[*ProtocolError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 	if IsRetryable(err) {
@@ -173,8 +171,7 @@ func TestScanOversizedResponse(t *testing.T) {
 	c := newClient(t, fake.Addr)
 	res, err := c.Scan(context.Background(), strings.NewReader("x"))
 	assertFailClosed(t, res, err)
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
+	if _, ok := errors.AsType[*ProtocolError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 }
@@ -187,8 +184,7 @@ func TestScanServerClosesWithoutResponse(t *testing.T) {
 	c := newClient(t, fake.Addr)
 	res, err := c.Scan(context.Background(), strings.NewReader("x"))
 	assertFailClosed(t, res, err)
-	var connErr *ConnectionError
-	if !errors.As(err, &connErr) {
+	if _, ok := errors.AsType[*ConnectionError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ConnectionError", err, err)
 	}
 	if !IsRetryable(err) {
@@ -325,8 +321,7 @@ func TestScanServerStreamLimit(t *testing.T) {
 	if !errors.Is(err, ErrSizeLimitExceeded) {
 		t.Fatalf("error = %v, want ErrSizeLimitExceeded", err)
 	}
-	var clamdErr *ClamdError
-	if !errors.As(err, &clamdErr) {
+	if _, ok := errors.AsType[*ClamdError](err); !ok {
 		t.Fatalf("error = %v, want *ClamdError in chain (server-side limit)", err)
 	}
 	if IsRetryable(err) {
@@ -484,8 +479,7 @@ func TestScanUnterminatedReply(t *testing.T) {
 			c := newClient(t, fake.Addr)
 			res, err := c.Scan(context.Background(), strings.NewReader("x"))
 			assertFailClosed(t, res, err)
-			var protoErr *ProtocolError
-			if !errors.As(err, &protoErr) {
+			if _, ok := errors.AsType[*ProtocolError](err); !ok {
 				t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 			}
 			if IsRetryable(err) {
@@ -519,8 +513,7 @@ func TestScanIOTimeout(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("scan took %v; I/O timeout did not fire", elapsed)
 	}
-	var connErr *ConnectionError
-	if !errors.As(err, &connErr) {
+	if _, ok := errors.AsType[*ConnectionError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ConnectionError", err, err)
 	}
 	if !IsRetryable(err) {
@@ -587,8 +580,7 @@ func TestScanMultilineReply(t *testing.T) {
 	c := newClient(t, fake.Addr)
 	res, err := c.Scan(context.Background(), strings.NewReader("x"))
 	assertFailClosed(t, res, err)
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
+	if _, ok := errors.AsType[*ProtocolError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 }
@@ -622,8 +614,7 @@ func TestScanNilConnFromDialFunc(t *testing.T) {
 		}))
 	res, err := c.Scan(context.Background(), strings.NewReader("x"))
 	assertFailClosed(t, res, err)
-	var connErr *ConnectionError
-	if !errors.As(err, &connErr) {
+	if _, ok := errors.AsType[*ConnectionError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ConnectionError", err, err)
 	}
 }
@@ -671,11 +662,9 @@ func TestScanConcurrencyLimit(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, 8)
 	for i := range errs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_, errs[i] = c.Scan(context.Background(), strings.NewReader("x"))
-		}()
+		})
 	}
 	wg.Wait()
 	for i, err := range errs {
@@ -698,14 +687,12 @@ func TestScanSlotWaitRespectsContext(t *testing.T) {
 
 	started := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		close(started)
 		if _, err := c.Scan(context.Background(), strings.NewReader("x")); err != nil {
 			t.Errorf("slot-holding scan failed: %v", err)
 		}
-	}()
+	})
 	<-started
 	time.Sleep(50 * time.Millisecond) // let the first scan claim the slot
 
@@ -805,8 +792,7 @@ func TestScanMidStreamOKIsProtocolError(t *testing.T) {
 	c := newClient(t, fake.Addr, WithMaxStreamSize(NoSizeLimit))
 	res, err := c.Scan(context.Background(), bytes.NewReader(make([]byte, 8<<20)))
 	assertFailClosed(t, res, err)
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
+	if _, ok := errors.AsType[*ProtocolError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 	if IsRetryable(err) {
@@ -823,8 +809,7 @@ func TestScanMidStreamGarbageIsConnectionError(t *testing.T) {
 	c := newClient(t, fake.Addr, WithMaxStreamSize(NoSizeLimit))
 	res, err := c.Scan(context.Background(), bytes.NewReader(make([]byte, 8<<20)))
 	assertFailClosed(t, res, err)
-	var connErr *ConnectionError
-	if !errors.As(err, &connErr) {
+	if _, ok := errors.AsType[*ConnectionError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ConnectionError", err, err)
 	}
 	if !IsRetryable(err) {
@@ -862,8 +847,7 @@ func TestScanReplyAtReadLimitBoundary(t *testing.T) {
 		c := newClient(t, fake.Addr)
 		res, err := c.Scan(context.Background(), strings.NewReader("x"))
 		assertFailClosed(t, res, err)
-		var protoErr *ProtocolError
-		if !errors.As(err, &protoErr) {
+		if _, ok := errors.AsType[*ProtocolError](err); !ok {
 			t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 		}
 	})
@@ -893,8 +877,7 @@ func TestScanBytesSizeLimitBoundary(t *testing.T) {
 	if errors.Is(err, ErrSizeLimitExceeded) {
 		t.Fatalf("error = %v; input exactly at the limit must not be size-rejected", err)
 	}
-	var connErr *ConnectionError
-	if !errors.As(err, &connErr) {
+	if _, ok := errors.AsType[*ConnectionError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ConnectionError from the dial", err, err)
 	}
 	if n := dials.Load(); n != 1 {

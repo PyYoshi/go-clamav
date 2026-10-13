@@ -24,8 +24,7 @@ func TestPingUnexpectedReply(t *testing.T) {
 	fake.SetHandler(clamdtest.RespondWith("NOT PONG\x00"))
 	c := newClient(t, fake.Addr)
 	err := c.Ping(context.Background())
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
+	if _, ok := errors.AsType[*ProtocolError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 }
@@ -35,8 +34,7 @@ func TestPingDown(t *testing.T) {
 	c := newClient(t, fake.Addr)
 	fake.Close()
 	err := c.Ping(context.Background())
-	var connErr *ConnectionError
-	if !errors.As(err, &connErr) {
+	if _, ok := errors.AsType[*ConnectionError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ConnectionError", err, err)
 	}
 	if !IsRetryable(err) {
@@ -61,8 +59,7 @@ func TestVersionErrorReply(t *testing.T) {
 	fake.SetHandler(clamdtest.RespondWith("something broke ERROR\x00"))
 	c := newClient(t, fake.Addr)
 	_, err := c.Version(context.Background())
-	var clamdErr *ClamdError
-	if !errors.As(err, &clamdErr) {
+	if _, ok := errors.AsType[*ClamdError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ClamdError", err, err)
 	}
 }
@@ -92,8 +89,7 @@ func TestReloadUnexpectedReply(t *testing.T) {
 	fake.SetHandler(clamdtest.RespondWith("NOPE\x00"))
 	c := newClient(t, fake.Addr)
 	err := c.Reload(context.Background())
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
+	if _, ok := errors.AsType[*ProtocolError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 }
@@ -103,8 +99,7 @@ func TestReloadErrorReply(t *testing.T) {
 	fake.SetHandler(clamdtest.RespondWith("reload failed ERROR\x00"))
 	c := newClient(t, fake.Addr)
 	err := c.Reload(context.Background())
-	var clamdErr *ClamdError
-	if !errors.As(err, &clamdErr) {
+	if _, ok := errors.AsType[*ClamdError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ClamdError", err, err)
 	}
 }
@@ -135,8 +130,7 @@ func TestPingMultilineReply(t *testing.T) {
 	fake.SetHandler(clamdtest.RespondWith("PONG\ngarbage\x00"))
 	c := newClient(t, fake.Addr)
 	err := c.Ping(context.Background())
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
+	if _, ok := errors.AsType[*ProtocolError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 }
@@ -152,8 +146,7 @@ func TestStatsOversizedBlock(t *testing.T) {
 	if err == nil {
 		t.Fatal("2 MiB STATS block accepted; the read bound is missing")
 	}
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
+	if _, ok := errors.AsType[*ProtocolError](err); !ok {
 		t.Fatalf("error = %T(%v), want *ProtocolError", err, err)
 	}
 }
