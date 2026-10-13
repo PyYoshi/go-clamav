@@ -66,6 +66,8 @@ jobs:
           go install github.com/zricethezav/gitleaks/v8@v8.30.1
           gitleaks git --redact --no-banner --verbose
       - name: actionlint (workflow syntax, expressions, shellcheck)
+        # Pinned in the Makefile too. When bumping, delete
+        # .github/actionlint.yaml if the new release knows ubuntu-26.04.
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           actionlint

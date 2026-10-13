@@ -6,6 +6,8 @@ GOLANGCI_LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lin
 
 GOVULNCHECK_VERSION ?= v1.7.0
 
+# Pinned in the CI lint job too. When bumping, delete .github/actionlint.yaml
+# if the new release knows the ubuntu-26.04 runner label.
 ACTIONLINT_VERSION ?= v1.7.12
 
 GITLEAKS_VERSION ?= v8.30.1
