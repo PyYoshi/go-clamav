@@ -6,7 +6,7 @@ file covers the mechanics.
 
 ## Setup
 
-- Go 1.26+ (`go.mod` pins the floor; `GOTOOLCHAIN=auto` fetches it).
+- Go 1.27+ (`go.mod` pins the floor; `GOTOOLCHAIN=auto` fetches it).
 - Docker with the compose plugin (integration tests).
 - `jq` (used by the Claude Code guard hooks; optional otherwise).
 
