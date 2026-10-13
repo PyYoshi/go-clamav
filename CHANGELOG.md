@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
 ### Changed
 
 - Require Go 1.27: the toolchain floor moves from 1.26.6 to 1.27.2, which
@@ -199,7 +201,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
   SECURITY.md threat model, ADR-0001, operations guide, runnable examples
   (`basicscan`, `httpupload`).
 
-[Unreleased]: https://github.com/PyYoshi/go-clamav/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/PyYoshi/go-clamav/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/PyYoshi/go-clamav/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/PyYoshi/go-clamav/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/PyYoshi/go-clamav/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/PyYoshi/go-clamav/compare/v0.2.0...v0.2.1
