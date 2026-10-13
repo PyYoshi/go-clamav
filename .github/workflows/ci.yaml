@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,7 +31,7 @@ jobs:
         run: bash ./scripts/fuzz.sh
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,7 +84,7 @@ jobs:
   # tracking. The only job with security-events: write, so the lint job
   # stays read-only; merge gating is the zizmor step in lint.
   zizmor-sarif:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read # check out the workflows to audit
       security-events: write # upload the SARIF results to code scanning
@@ -103,7 +103,7 @@ jobs:
   # EOL (2025-11-28). `latest` is intentionally NOT here — see
   # integration-canary.
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -133,7 +133,7 @@ jobs:
   # upstream changes surface as signal without breaking required CI.
   integration-canary:
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     continue-on-error: true
     env:
       CLAMAV_IMAGE: clamav/clamav:latest

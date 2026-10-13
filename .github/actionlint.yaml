@@ -1,0 +1,12 @@
+# actionlint configuration (read automatically from .github/ by the lint
+# job and `make lint`).
+#
+# ubuntu-26.04 is a GitHub-hosted runner label (GA; see
+# actions/runner-images#14748), but actionlint v1.7.12 does not know it
+# yet (rhysd/actionlint#682) and reports it as unknown. Registering it as
+# a custom label accepts exactly this one label; every other runner label
+# is still checked. Remove this file once a pinned actionlint release
+# knows ubuntu-26.04.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
