@@ -20,6 +20,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - golangci-lint is updated to v2.14.0 in CI and the Makefile. v2.12.2
   cannot load Go 1.27 export data, so `make lint` failed on any Go 1.27
   toolchain.
+- CI jobs run on `ubuntu-26.04` instead of `ubuntu-latest`, so the Ubuntu
+  release CI runs on changes only through an edit to the CI workflow, not
+  when GitHub moves the `ubuntu-latest` label. `.github/actionlint.yaml`
+  registers the label, which actionlint v1.7.12 does not know yet.
 
 ## [0.3.0] - 2026-09-23
 
