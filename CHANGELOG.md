@@ -38,13 +38,18 @@ project adheres to [Semantic Versioning](https://semver.org/).
   `git -c commit.gpgsign` values other than true, yes, on or 1,
   `git config` unsetting, emptying or removing the signing and hooks
   settings, and gh aliases carrying `--admin`.
-- Each command line is read twice, as written and normalized, and twice
-  more with each substitution replaced by one word when it has one. It is
+- Each command line is read twice, as written and normalized, then twice
+  more with each substitution replaced by one word if it has one, and
+  twice more with the separators inside quotes turned into spaces if it
+  has quotes (`git commit -m "feat(proto): x" --no-verify`). It is
   blocked if any reading blocks it, so normalization cannot hide a
-  command the guard blocked before. The run time stays linear in the
-  command length, since a hook that times out lets the command through.
-  Its comments no longer claim that only false blocks are possible: it
-  remains an advisory layer, and rulesets and CI stay authoritative.
+  command the guard blocked before. A hook that times out lets the
+  command through, so the extra readings are kept cheap: segments that
+  name neither git nor gh are skipped and the whole-line trailer search
+  runs once, which keeps a 1 MB heredoc command at about 4 s against the
+  15 s hook timeout. Its comments no longer claim that only false blocks
+  are possible: it remains an advisory layer, and rulesets and CI stay
+  authoritative.
 
 ## [0.4.0] - 2026-10-14
 

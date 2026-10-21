@@ -24,10 +24,13 @@
 #
 # Each command line is read twice and blocked if either reading blocks it:
 # once split as written, and once with continued lines joined, redirections
-# dropped and comments cut. A line with a $(...) or backtick substitution
-# is read twice more with each substitution replaced by one word. No
-# reading follows shell quoting, so quoted text can cause a false block, or
-# hide a word from some of the readings.
+# dropped and comments cut. A line with a $(...), <(...) or backtick
+# substitution is read twice more with each substitution replaced by one
+# word, and a line with quotes twice more with the separators inside quotes
+# turned into spaces. Only that last pair follows quoting, and only for
+# separators, so quoted text can still cause a false block, and a
+# separator quoted inside a substitution can still hide a word from every
+# reading.
 #
 # Advisory layer: this is a string filter, not a shell parser. It cannot see
 # commands assembled at runtime (scripts, aliases, variables, exported
@@ -60,10 +63,15 @@ lc() {
 # checkout that creates another branch returns to the branch checked out
 # when the hook runs, which is never overridden the other way.
 on_main=0
+head_is_main=""
 
 on_main_branch() {
   [ "$on_main" = 1 ] && return 0
-  [ "$(git symbolic-ref --short -q HEAD 2>/dev/null)" = "main" ]
+  if [ -z "$head_is_main" ]; then
+    head_is_main=0
+    [ "$(git symbolic-ref --short -q HEAD 2>/dev/null)" = "main" ] && head_is_main=1
+  fi
+  [ "$head_is_main" = 1 ]
 }
 
 # abbrev_of TOKEN OPTION MIN: TOKEN is OPTION or a prefix of it at least MIN
@@ -415,9 +423,8 @@ check_git() {
     ;;
   remote)
     for t in "${rest[@]}"; do
-      case "$t" in
-      --mirror*) block "a mirror remote (git remote --mirror) force-pushes every ref, including main" ;;
-      esac
+      abbrev_of "${t%%=*}" --mirror 4 &&
+        block "a mirror remote (git remote --mirror) force-pushes every ref, including main"
     done
     ;;
   esac
@@ -505,6 +512,14 @@ scan() {
   on_main=0
   [ "$1" = joined ] && input=${input//\\$'\n'/ }
   while IFS= read -r raw_seg; do
+    # A segment that names neither git, gh nor GIT_CONFIG_ once quotes and
+    # backslashes are gone matches no rule; skipping it keeps long heredoc
+    # bodies cheap.
+    t=${raw_seg//[\"\'\\]/}
+    case "$t" in
+    *git* | *gh* | *GIT_CONFIG_*) ;;
+    *) continue ;;
+    esac
     read -ra raw <<<"$raw_seg"
     words=()
     skip=0
@@ -550,22 +565,55 @@ scan() {
   done < <(printf '%s\n' "$input" | tr '|;&`()' '\n')
 }
 
-# flatten_subst TEXT: TEXT with each $(...) (nesting counted, across lines)
-# and each backtick pair replaced by one word, so the words after it stay
-# with their command (git commit -m "$(cat <<EOF ...)" --no-verify).
+# The awk passes below read one line per record, carry their state across
+# lines, split each line into characters once and print each character as
+# they go: substr() over a long record, or a growing output string, makes
+# some awks (BWK, mawk, busybox) quadratic in the length, and a hook that
+# times out lets the command through.
+
+# flatten_subst TEXT: TEXT with each $(...) or <(...) (nesting counted,
+# across lines) and each backtick pair replaced by one word, so the words
+# after it stay with their command (git commit -m "$(cat <<EOF ...)" -n).
 flatten_subst() {
-  printf '%s' "$1" | awk 'BEGIN { RS = "\001"; ORS = "" }
+  printf '%s' "$1" | awk '
   {
-    depth = 0; tick = 0; out = ""; n = length($0)
+    n = split($0, ch, "")
     for (i = 1; i <= n; i++) {
-      c = substr($0, i, 1)
+      c = ch[i]
       if (tick) { if (c == "`") tick = 0; continue }
       if (depth > 0) { if (c == "(") depth++; else if (c == ")") depth--; continue }
-      if (c == "$" && substr($0, i + 1, 1) == "(") { depth = 1; i++; out = out "SUBST"; continue }
-      if (c == "`") { tick = 1; out = out "SUBST"; continue }
-      out = out c
+      if ((c == "$" || c == "<" || c == ">") && ch[i + 1] == "(") { depth = 1; i++; printf "SUBST"; continue }
+      if (c == "`") { tick = 1; printf "SUBST"; continue }
+      printf "%s", c
     }
-    print out
+    if (depth == 0 && !tick) printf "\n"
+  }'
+}
+
+# quote_neutral TEXT: TEXT with |, ;, &, parentheses, backticks and
+# newlines inside quotes turned into spaces, and comments cut, so a quoted
+# separator (-m "feat(proto): x") does not cut the words after it off from
+# their command. Backslash escapes are honoured.
+quote_neutral() {
+  printf '%s' "$1" | awk '
+  {
+    n = split($0, ch, ""); prev = " "
+    for (i = 1; i <= n; i++) {
+      c = ch[i]
+      if (esc) { esc = 0 }
+      else if (q == "\047") { if (c == "\047") q = ""; else if (c ~ /[|;&()`]/) c = " " }
+      else if (q == "\"") {
+        if (c == "\\") esc = 1
+        else if (c == "\"") q = ""
+        else if (c ~ /[|;&()`]/) c = " "
+      }
+      else if (c == "\\") esc = 1
+      else if (c == "#" && (prev == " " || prev == "\t")) break
+      else if (c == "\047" || c == "\"") q = c
+      printf "%s", c
+      prev = c
+    }
+    if (q == "") printf "\n"; else printf " "
   }'
 }
 
@@ -582,10 +630,17 @@ fi
 scan split "$cmd"
 scan joined "$cmd"
 case "$cmd" in
-*\$\(* | *\`*)
+*\$\(* | *\<\(* | *\>\(* | *\`*)
   flat=$(flatten_subst "$cmd")
   scan split "$flat"
   scan joined "$flat"
+  ;;
+esac
+case "$cmd" in
+*[\"\']*)
+  neutral=$(quote_neutral "$cmd")
+  scan split "$neutral"
+  scan joined "$neutral"
   ;;
 esac
 

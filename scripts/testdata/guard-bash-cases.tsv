@@ -396,8 +396,36 @@ allow	feature	git config --get-regexp remote.origin.push x
 allow	feature	git config get --all alias.co
 # Every alias write is blocked, harmless ones included.
 block	feature	git config --global alias.co checkout
+# --- final review: quoted separators, substitutions with unbalanced parentheses, process substitution, --mi
+block	feature	git commit -m "feat(proto): x" --no-verify
+block	feature	git commit -m "Fix a; b" -n
+block	feature	git commit -m "a & b" --no-gpg-sign
+block	feature	git push origin x -o "a|b" --force
+block	feature	git commit -m "fix parser (ADR-0007)" --no-verify
+block	feature	git commit -m "$(cat <<'EOF'<NL>Summary<NL><NL>1) do x<NL>2) do y<NL>EOF<NL>)" --no-verify
+block	feature	git commit -m "$(cat <<'EOF'<NL>Fix (see ADR<NL>EOF<NL>)" --no-verify
+block	feature	git commit -F <(printf x) --no-verify
+block	feature	git commit -m "$(printf x)" --no-verify
+block	feature	git commit -m "`date`" --no-verify
+block	feature	git commit -m "$((1+2))" -n
+block	feature	git commit -m x $(: ) --no-verify
+allow	feature	echo "$(git rev-parse HEAD)" > /tmp/sha
+allow	feature	git log --format="%h" $(git merge-base HEAD origin/main)..HEAD
+allow	feature	gh pr create --title "x" --body "$(cat <<'EOF'<NL>## Summary<NL>- blocks force pushes<NL>EOF<NL>)"
+allow	feature	X=$(git branch --show-current) && git push -u origin "$X"
+allow	feature	git push -u origin "$(git branch --show-current)"
+allow	feature	git commit -m "$(cat <<'EOF'<NL>Fix<NL>EOF<NL>)"
+allow	main	git tag -s v0.5.0 -m "$(printf 'go-clamav v0.5.0')"
+allow	feature	test "$(git rev-parse --abbrev-ref HEAD)" = main || git push origin HEAD
+allow	feature	git commit -m "$(cat <<'EOF'<NL>Handle (nested) parens and it's fine<NL>EOF<NL>)"
+block	feature	git remote add --mi=push bk git@github.com:o/r.git
 # --- known gaps (not run): ANSI-C escapes are not decoded, and a
 # branch-creating checkout clears an earlier checkout of main even when
 # it fails before a ;-separated push. The real HEAD is always checked.
 #	git push origin $'\155ain'
 #	git checkout main; git checkout -b fix/x; git push -u origin HEAD
+# A separator quoted inside a substitution, and a read or unset option
+# word inside a quoted config value, still hide a word from every reading.
+#	git commit -m "$(echo ")")" --no-verify
+#	git config alias.p "!sh -c 'git push -f origin x' --unset"
+#	git config alias.p "!sh -c 'git push -f origin x' --get"
