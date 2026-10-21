@@ -21,13 +21,21 @@ project adheres to [Semantic Versioning](https://semver.org/).
   variable assignment, a path, a shell keyword or a wrapper (`env`,
   `sudo`, `sh -c`, `xargs`, ...), quoted words, short-option clusters
   (`-nm`, `-uf`), the long-option abbreviations git accepts
-  (`--no-verif`), `@` for HEAD, backslash-continued lines, a redirection
-  such as `2>&1` that hid a push from main, and a push after
-  `git checkout main` in the same command line. It also blocks
-  `git push --all`/`--mirror`, signing and `core.hooksPath` overrides
-  through `--config-env` or `GIT_CONFIG_*` variables, any
-  `git -c commit.gpgsign` value other than true, and
-  `git config --unset commit.gpgsign`. Its comments no longer claim that
+  (`--no-verif`, `--m` for `--mirror`), `@` for HEAD, words glued to a
+  redirection (`-f>/dev/null`), redirections, comments and `-o` values
+  that hid a push from main, backslash-continued lines, a Co-Authored-By
+  trailer on a later line of the command, and a push after
+  `git checkout main` in the same command line.
+- It also blocks `--no-verify`/`--no-gpg-sign` on every git command,
+  `git push --all`/`--branches`/`--mirror` and matching, wildcard or
+  brace-expanded refspecs, signing and `core.hooksPath` overrides through
+  `--config-env` or `GIT_CONFIG_*` variables, `git -c` alias and
+  push-refspec definitions, `git -c commit.gpgsign` values other than
+  true, yes, on or 1, and `git config` unsetting, emptying or removing
+  the signing and hooks settings.
+- Each command line is read twice, as written and normalized, and is
+  blocked if either reading blocks it, so normalization cannot hide a
+  command the guard blocked before. Its comments no longer claim that
   only false blocks are possible: it remains an advisory layer, and
   rulesets and CI stay authoritative.
 

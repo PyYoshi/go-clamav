@@ -5,12 +5,12 @@
 # `grep Co-Authored-By AGENTS.md` are allowed).
 #
 # Blocked:
-#   - git commit with a Co-Authored-By trailer
-#   - git commit/merge/push with --no-verify / --no-gpg-sign (-n on commit)
-#   - git push --force / +refspec / --all / --mirror, and any push
-#     targeting main
+#   - git commit when the command line carries a Co-Authored-By trailer
+#   - --no-verify / --no-gpg-sign on any git command (-n on commit)
+#   - git push --force / +refspec / --all / --branches / --mirror, matching
+#     (:), wildcard and brace-expanded refspecs, and any push targeting main
 #   - git config / git -c / GIT_CONFIG_* changing commit.gpgsign or
-#     core.hooksPath
+#     core.hooksPath, and git -c defining aliases or push refspecs
 #   - gh pr merge --admin (bypasses required checks)
 #
 # git and gh are found behind variable assignments, a path (/usr/bin/git),
@@ -18,10 +18,15 @@
 # ...). Quotes are stripped, short options are read inside clusters (-nm,
 # -uf), and long options also by the abbreviations git accepts (--no-verif).
 #
-# Advisory layer: a string filter cannot see commands assembled at runtime
-# (scripts, aliases, variables, exported config), so a deliberate bypass
-# remains possible; it also fails open without jq. Rulesets and CI are
-# authoritative.
+# Each command line is read twice and blocked if either reading blocks it:
+# once split as written, and once with continued lines joined, redirections
+# dropped and comments cut. Neither reading follows shell quoting, so quoted
+# text can cause a false block, or hide a word from one of the readings.
+#
+# Advisory layer: this is a string filter, not a shell parser. It cannot see
+# commands assembled at runtime (scripts, aliases, variables, exported
+# config), literal forms it does not model can still get through, and it
+# fails open without jq. Rulesets and CI are authoritative.
 #
 # Kept bash 3.2 compatible (macOS /bin/bash): no ${var,,} lowercasing, and
 # no `set -u` — empty-array expansion trips it on bash < 4.4.
@@ -45,17 +50,19 @@ lc() {
 }
 
 # A push later in the same command line runs after any checkout before it,
-# so a switch to main earlier in the line counts as being on main.
-switched_to_main=0
+# so a checkout of main earlier in the line counts as being on main. A
+# checkout that creates another branch returns to the branch checked out
+# when the hook runs, which is never overridden the other way.
+on_main=0
 
 on_main_branch() {
-  [ "$switched_to_main" = 1 ] && return 0
+  [ "$on_main" = 1 ] && return 0
   [ "$(git symbolic-ref --short -q HEAD 2>/dev/null)" = "main" ]
 }
 
 # abbrev_of TOKEN OPTION MIN: TOKEN is OPTION or a prefix of it at least MIN
 # characters long. git accepts any unambiguous abbreviation of a long
-# option, and MIN is set below the point where git starts resolving one.
+# option, and MIN is at or below the shortest one git resolves.
 abbrev_of() {
   [ "${#1}" -ge "$3" ] || return 1
   case "$2" in
@@ -64,16 +71,38 @@ abbrev_of() {
   return 1
 }
 
-# short_flag CLUSTER FLAG VALUED: the short-option cluster (-nm) contains
-# FLAG before any option in VALUED, which takes the rest of the cluster as
-# its value (-mn is -m with the message "n").
+# short_flag CLUSTER FLAG VALUED VALID: git would accept the short-option
+# cluster (-nm) and it sets FLAG. The first option in VALUED takes the rest
+# of the cluster as its value (-mn is -m with the message "n"); a letter
+# outside VALID makes git reject the whole cluster before acting on it.
 short_flag() {
+  local s=${1#-} c found=1
+  while [ -n "$s" ]; do
+    c=${s:0:1}
+    case "$4" in
+    *"$c"*) ;;
+    *) return 1 ;;
+    esac
+    [ "$c" = "$2" ] && found=0
+    case "$3" in
+    *"$c"*) return "$found" ;;
+    esac
+    s=${s:1}
+  done
+  return "$found"
+}
+
+# takes_next CLUSTER VALUED: the cluster ends in an option that takes the
+# next word as its value (-o ci.skip, -uo ci.skip).
+takes_next() {
   local s=${1#-} c
   while [ -n "$s" ]; do
     c=${s:0:1}
-    [ "$c" = "$2" ] && return 0
-    case "$3" in
-    *"$c"*) return 1 ;;
+    case "$2" in
+    *"$c"*)
+      [ "${#s}" -eq 1 ]
+      return
+      ;;
     esac
     s=${s:1}
   done
@@ -96,20 +125,28 @@ check_config_pair() {
     *) block "disabling commit signing (git -c commit.gpgsign=...)" ;;
     esac
     ;;
+  alias.*=*)
+    block "defining a git alias inline (git -c alias.*) can hide a blocked command"
+    ;;
+  remote.*.mirror=* | remote.*.push=* | push.default=*)
+    block "git -c changing which refs a push selects can push main"
+    ;;
   esac
 }
 
 # GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT/KEY_n/VALUE_n are the
-# environment form of git -c, and reach every git a command runs.
+# environment form of git -c and reach every git a command runs. One
+# variable can carry several entries, so the whole segment is searched.
 check_config_env() {
   local t
   for t in "$@"; do
     case "$t" in
-    GIT_CONFIG_*=*)
-      case "$(lc "$t")" in
+    GIT_CONFIG_PARAMETERS=* | GIT_CONFIG_COUNT=* | GIT_CONFIG_KEY_*=* | GIT_CONFIG_VALUE_*=*)
+      case "$(lc "$*")" in
       *commit.gpgsign*) block "overriding commit signing through GIT_CONFIG_* variables" ;;
       *core.hookspath*) block "overriding core.hooksPath through GIT_CONFIG_* variables bypasses the repository git hooks" ;;
       esac
+      return
       ;;
     esac
   done
@@ -138,7 +175,7 @@ check_git() {
       i=$((i + 1))
       continue
       ;;
-    -C | --git-dir | --work-tree | --namespace | --exec-path)
+    -C | --git-dir | --work-tree | --namespace | --exec-path | --attr-source | --super-prefix)
       i=$((i + 2))
       continue
       ;;
@@ -155,38 +192,38 @@ check_git() {
   [ -n "$sub" ] || return 0
   local rest=("${tokens[@]:$((i + 1))}")
 
+  # AGENTS.md forbids these on every git command, not only commit/merge/push.
+  for t in "${rest[@]}"; do
+    case "$t" in
+    --*)
+      name=${t%%=*}
+      abbrev_of "$name" --no-verify 6 && block "git $sub --no-verify skips the repository git hooks"
+      abbrev_of "$name" --no-gpg-sign 6 && block "all commits must be SSH-signed (no --no-gpg-sign)"
+      ;;
+    esac
+  done
+
   case "$sub" in
   commit)
-    if grep -qi 'co-authored-by' <<<"$seg"; then
+    # The trailer can sit on a later line of a multi-line message or a
+    # heredoc, so the whole command line is searched.
+    if grep -qi 'co-authored-by' <<<"$cmd"; then
       block "Co-Authored-By trailers are not allowed in commit messages"
     fi
     for t in "${rest[@]}"; do
       case "$t" in
-      --*)
-        name=${t%%=*}
-        abbrev_of "$name" --no-verify 6 && block "git commit --no-verify skips the repository git hooks"
-        abbrev_of "$name" --no-gpg-sign 6 && block "all commits must be SSH-signed (no --no-gpg-sign)"
-        ;;
+      --*) ;;
       -*)
-        short_flag "$t" n mFCctSu && block "git commit --no-verify skips the repository git hooks"
-        ;;
-      esac
-    done
-    ;;
-  merge)
-    for t in "${rest[@]}"; do
-      case "$t" in
-      --*)
-        name=${t%%=*}
-        abbrev_of "$name" --no-verify 6 && block "git merge --no-verify skips the repository git hooks"
-        abbrev_of "$name" --no-gpg-sign 6 && block "all commits must be SSH-signed (no --no-gpg-sign)"
+        short_flag "$t" n FmcCtUSu qvseaipoznFmcCtUSu && block "git commit --no-verify skips the repository git hooks"
         ;;
       esac
     done
     ;;
   push)
-    local nonopt=()
+    local nonopt=() value=0 isvalue
     for t in "${rest[@]}"; do
+      isvalue=$value
+      value=0
       case "$t" in
       --*)
         name=${t%%=*}
@@ -194,19 +231,34 @@ check_git() {
           abbrev_of "$name" --force-if-includes 5; then
           block "force-pushing is not allowed"
         fi
-        abbrev_of "$name" --no-verify 6 && block "git push --no-verify skips the repository git hooks"
-        if abbrev_of "$name" --all 4 || abbrev_of "$name" --mirror 4; then
-          block "git push --all/--mirror also pushes main; push a single feature branch"
+        if abbrev_of "$name" --all 3 || abbrev_of "$name" --branches 3 || abbrev_of "$name" --mirror 3; then
+          block "git push --all/--branches/--mirror also pushes main; push a single feature branch"
+        fi
+        if [ "$name" = "$t" ]; then
+          if abbrev_of "$t" --push-option 5 || abbrev_of "$t" --repo 5 ||
+            abbrev_of "$t" --receive-pack 5 || abbrev_of "$t" --exec 4; then
+            value=1
+          fi
+        else
+          case "${t#*=}" in
+          main | refs/heads/main | heads/main | *:main | *:refs/heads/main | *:heads/main)
+            block "pushing to main directly is not allowed; open a pull request"
+            ;;
+          esac
         fi
         ;;
       -*)
-        short_flag "$t" f o && block "force-pushing is not allowed"
+        short_flag "$t" f o vqdnfu46o && block "force-pushing is not allowed"
+        takes_next "$t" o && value=1
         ;;
       +*) block "force-push refspecs (+...) are not allowed" ;;
-      main | refs/heads/main | *:main | *:refs/heads/main)
+      main | refs/heads/main | heads/main | *:main | *:refs/heads/main | *:heads/main)
         block "pushing to main directly is not allowed; open a pull request"
         ;;
-      *) nonopt+=("$t") ;;
+      :) block "git push : pushes every matching branch, including main" ;;
+      *\**) block "wildcard refspecs push every matching branch, including main" ;;
+      *{*,*}* | *{*..*}*) block "brace-expanded push arguments can name main" ;;
+      *) [ "$isvalue" = 1 ] || nonopt+=("$t") ;;
       esac
     done
     if [ "${#nonopt[@]}" -le 1 ] && on_main_branch; then
@@ -221,40 +273,99 @@ check_git() {
     done
     ;;
   checkout | switch)
-    for t in "${rest[@]}"; do
+    local target="" created="" track=0 want=0 j=0
+    while [ "$j" -lt "${#rest[@]}" ]; do
+      t=${rest[$j]}
+      j=$((j + 1))
+      if [ "$want" = 1 ]; then
+        created=$t
+        want=0
+        continue
+      fi
       case "$t" in
-      main | -) switched_to_main=1 ;;
+      --)
+        # Paths after -- restore files and leave the branch alone.
+        [ "$j" -lt "${#rest[@]}" ] && return 0
+        break
+        ;;
+      -b | -B | -c | -C | --orphan) want=1 ;;
+      -t | --track | --track=*) track=1 ;;
+      -) [ -n "$target" ] || target=$t ;;
+      -*) ;;
+      *) [ -n "$target" ] || target=$t ;;
       esac
     done
+    if [ -n "$created" ]; then
+      if [ "$created" = main ]; then on_main=1; else on_main=0; fi
+    elif [ "$track" = 1 ]; then
+      case "$target" in
+      */main) on_main=1 ;;
+      esac
+    else
+      case "$target" in
+      main | - | @{-*}) on_main=1 ;;
+      esac
+    fi
     ;;
   config)
     if grep -qi 'commit\.gpgsign' <<<"$seg"; then
       case "$(lc "$seg")" in
       *false* | *" 0"* | *" no"* | *" off"* | *unset*) block "disabling commit signing (commit.gpgsign)" ;;
       esac
+      # An empty value is false; stripped quotes would make it look like a read.
+      case "$raw_seg" in
+      *\"\"* | *\'\'*) block "disabling commit signing (commit.gpgsign set to an empty value)" ;;
+      esac
     fi
     if grep -qi 'core\.hookspath' <<<"$seg"; then
       block "changing core.hooksPath bypasses the repository git hooks (use make setup)"
     fi
+    case "$seg" in
+    *remove-section* | *rename-section*)
+      for t in "${rest[@]}"; do
+        case "$(lc "$t")" in
+        commit | core) block "removing or renaming the $t config section can turn off signing or the git hooks" ;;
+        esac
+      done
+      ;;
+    esac
     ;;
   esac
 }
 
 check_gh() {
-  local seg="${*}"
-  if grep -qE '(^|[[:space:]])pr[[:space:]]+merge([[:space:]]|$)' <<<"$seg" &&
-    grep -qE '(^|[[:space:]])--admin([[:space:]]|$)' <<<"$seg"; then
+  local pos=() t skip=0 admin=1
+  for t in "$@"; do
+    if [ "$skip" = 1 ]; then
+      skip=0
+      continue
+    fi
+    case "$t" in
+    -R | --repo) skip=1 ;;
+    --admin) admin=0 ;;
+    --admin=*)
+      case "$(lc "${t#--admin=}")" in
+      false | f | 0) ;;
+      *) admin=0 ;;
+      esac
+      ;;
+    -*) ;;
+    *) pos+=("$t") ;;
+    esac
+  done
+  if [ "${pos[0]}" = pr ] && [ "${pos[1]}" = merge ] && [ "$admin" = 0 ]; then
     block "gh pr merge --admin bypasses the required status checks"
   fi
 }
 
-# find_command WORD...: sets cmd_at to the index of the command word, or -1.
-# Variable assignments and shell keywords before it are skipped; behind a
-# wrapper that runs a command, the next git or gh word is taken, so wrapper
-# options and their values need no parsing.
+# find_command WORD...: sets cmd_idx to the indexes of the command words to
+# check. Variable assignments and shell keywords before the command are
+# skipped. Behind a wrapper that runs a command, every later git or gh word
+# is checked, so wrapper options and their values need no parsing (sudo -u
+# git git push still reaches the second git).
 find_command() {
   local words=("$@") i=0 t
-  cmd_at=-1
+  cmd_idx=()
   while [ "$i" -lt "${#words[@]}" ]; do
     t=${words[$i]}
     case "$t" in
@@ -265,21 +376,20 @@ find_command() {
     esac
     case "${t##*/}" in
     '!' | '{' | if | then | elif | else | do | while | until) ;;
-    env | command | builtin | exec | eval | nohup | nice | time | timeout | sudo | doas | xargs | sh | bash | zsh | dash | ksh)
+    env | command | builtin | exec | eval | nohup | nice | time | timeout | sudo | doas | su | xargs | \
+      sh | bash | zsh | dash | ksh | fish | busybox | script | stdbuf | setsid | ionice | flock | \
+      unbuffer | chronic | strace | coproc)
       i=$((i + 1))
       while [ "$i" -lt "${#words[@]}" ]; do
         case "${words[$i]##*/}" in
-        git | gh)
-          cmd_at=$i
-          return
-          ;;
+        git | gh) cmd_idx+=("$i") ;;
         esac
         i=$((i + 1))
       done
       return
       ;;
     *)
-      cmd_at=$i
+      cmd_idx=("$i")
       return
       ;;
     esac
@@ -287,42 +397,64 @@ find_command() {
   done
 }
 
-# Join backslash-continued lines, split compound commands on |, ;, &,
-# backticks and parentheses (the latter catch $(...) command substitutions
-# and subshells), strip quotes and backslashes and drop redirections, then
-# inspect each segment that invokes git or gh. Splitting and stripping
-# ignore quoting, so quoted text that looks like a separator or an option
-# can cause a rare false block.
-cmd=${cmd//\\$'\n'/ }
-while IFS= read -r seg; do
-  seg=${seg//\"/}
-  seg=${seg//\'/}
-  seg=${seg//\\/}
-  read -ra tok <<<"$seg"
-  words=()
-  skip=0
-  for t in "${tok[@]}"; do
-    if [ "$skip" = 1 ]; then
-      skip=0
-      continue
-    fi
-    case "$t" in
-    *[\<\>])
-      skip=1
-      continue
-      ;;
-    *[\<\>]*) continue ;;
-    esac
-    words+=("$t")
-  done
-  [ "${#words[@]}" -eq 0 ] && continue
-  check_config_env "${words[@]}"
-  find_command "${words[@]}"
-  [ "$cmd_at" -ge 0 ] || continue
-  case "${words[$cmd_at]##*/}" in
-  git) check_git "${words[@]:$((cmd_at + 1))}" ;;
-  gh) check_gh "${words[@]:$((cmd_at + 1))}" ;;
-  esac
-done < <(printf '%s\n' "$cmd" | tr '|;&`()' '\n')
+# scan MODE: splits the command line on |, ;, &, backticks and parentheses
+# (the latter catch $(...) command substitutions and subshells), strips
+# quotes and backslashes, and checks every segment that runs git or gh.
+# Mode "joined" also joins backslash-continued lines, cuts comments and
+# drops redirections, keeping a word glued to one (-f>/dev/null). Mode
+# "split" does none of that, so a quoted ">", "\" or "#" cannot hide a word
+# from both readings.
+scan() {
+  local input=$cmd t words skip
+  on_main=0
+  [ "$1" = joined ] && input=${input//\\$'\n'/ }
+  while IFS= read -r raw_seg; do
+    read -ra raw <<<"$raw_seg"
+    words=()
+    skip=0
+    for t in "${raw[@]}"; do
+      if [ "$1" = joined ]; then
+        if [ "$skip" = 1 ]; then
+          skip=0
+          continue
+        fi
+        case "$t" in
+        '#'*) break ;;
+        esac
+      fi
+      t=${t//\$\"/\"}
+      t=${t//\$\'/\'}
+      t=${t//\"/}
+      t=${t//\'/}
+      t=${t//\\/}
+      if [ "$1" = joined ]; then
+        case "$t" in
+        *[\<\>]*)
+          case "$t" in
+          *[\<\>]) skip=1 ;;
+          esac
+          t=${t%%[\<\>]*}
+          case "$t" in
+          '' | [0-9] | [0-9][0-9]) continue ;;
+          esac
+          ;;
+        esac
+      fi
+      words+=("$t")
+    done
+    [ "${#words[@]}" -eq 0 ] && continue
+    check_config_env "${words[@]}"
+    find_command "${words[@]}"
+    for i in "${cmd_idx[@]}"; do
+      case "${words[$i]##*/}" in
+      git) check_git "${words[@]:$((i + 1))}" ;;
+      gh) check_gh "${words[@]:$((i + 1))}" ;;
+      esac
+    done
+  done < <(printf '%s\n' "$input" | tr '|;&`()' '\n')
+}
+
+scan split
+scan joined
 
 exit 0

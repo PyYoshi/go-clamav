@@ -85,6 +85,88 @@ block	feature	git --config-env=core.hooksPath=HP commit -m x
 block	feature	git --config-env commit.gpgsign=SIGN commit -m x
 block	feature	git -c commit.gpgsign= commit -m x
 block	feature	git config --unset commit.gpgsign
+# --- review: quoted or escaped ">", "<", "\" and "#" must not hide a word
+block	feature	git commit -m "a ->" --no-verify
+block	feature	git commit -m "see <" -n
+block	feature	git push -o "ci >" --force origin x
+block	feature	echo C:\\<NL>git push -f origin x
+block	feature	# force it \<NL>git push -f origin x
+block	feature	git push origin +x>/dev/null
+block	feature	git commit -m x --trailer "Co-Authored-By=<a@b>"
+block	feature	git commit -m "Co-Authored-By:<a@b>"
+block	feature	git -c core.hooksPath=/tmp/h>/dev/null commit -m x
+block	feature	git push origin x --force-with-lease=x:<sha>
+block	feature	git config commit.gpgsign false>/dev/null
+block	feature	gh pr merge 5 --subject "Merge a ->" --admin
+block	feature	git push --push-option=ci:main origin x
+block	feature	git>/dev/null push -f origin x
+block	feature	git push>/dev/null -f origin x
+# --- review: abbreviations, aliases, config entries, option values, comments, wrappers, other commands and push targets
+block	feature	git push --m origin
+block	feature	git push --branches origin
+block	feature	git push --b origin
+block	feature	GIT_CONFIG_PARAMETERS="'user.name'='x' 'core.hooksPath'='/dev/null'" git commit -m x
+block	feature	GIT_CONFIG_PARAMETERS="'user.name'='x' 'commit.gpgsign'='false'" git commit -m x
+block	feature	git push -f>/dev/null origin x
+block	feature	git push --force>log origin x
+block	feature	git push origin main>/dev/null
+block	feature	git push origin HEAD:main>/dev/null
+block	main	git push -o ci.skip origin
+block	main	git push origin -o ci.skip
+block	main	git push origin # done
+block	main	git push # push it
+block	feature	git push origin $'main'
+block	feature	git push origin $"main"
+block	feature	stdbuf -oL git push -f origin x
+block	feature	setsid git push -f origin x
+block	feature	ionice -c3 git push -f origin x
+block	feature	flock /tmp/l git push -f origin x
+block	feature	coproc git push -f origin x
+block	feature	unbuffer git push -f origin x
+block	feature	script -qc "git push -f origin x" /dev/null
+block	feature	fish -c "git push -f origin x"
+block	feature	busybox sh -c "git push -f origin x"
+block	feature	strace -f git push -f origin x
+block	feature	chronic git push -f origin x
+block	feature	time -p git push -f origin x
+block	feature	exec -a foo git push -f origin x
+block	feature	command -p git push -f origin x
+block	feature	sudo -E env GIT_TERMINAL_PROMPT=0 git push -f origin x
+block	feature	git checkout @{-1} && git push
+block	feature	git checkout --track origin/main && git push
+block	feature	git config commit.gpgsign ""
+block	feature	git config commit.gpgsign ''
+block	feature	git config --remove-section commit
+block	feature	git config --rename-section commit old
+block	feature	git commit -m "$(cat <<'EOF'<NL>Fix x<NL><NL>Co-Authored-By: Claude <noreply@anthropic.com><NL>EOF<NL>)"
+block	feature	git commit -m "Fix x<NL><NL>Co-Authored-By: a <a@b>"
+block	feature	git commit -F - <<EOF<NL>Fix<NL><NL>Co-Authored-By: a <a@b><NL>EOF
+block	feature	git pull --no-verify
+block	feature	git pull --no-gpg-sign
+block	feature	git rebase --no-gpg-sign origin/main
+block	feature	git cherry-pick --no-gpg-sign abc123
+block	feature	git revert --no-gpg-sign abc123
+block	feature	git am --no-verify x.patch
+block	feature	git push origin HEAD:heads/main
+block	feature	git push origin heads/main
+block	feature	git push origin :
+block	feature	git push origin "refs/heads/*"
+block	feature	git push origin "*:*"
+block	feature	git -c remote.origin.mirror=true push origin
+block	feature	git -c push.default=matching push
+block	feature	gh pr merge 5 --admin=true
+block	feature	git --attr-source HEAD push -f origin x
+block	feature	git -c alias.p="push -f" p origin x
+block	feature	git push origin {main,x}
+block	feature	git -C ../other push -f origin x
+block	feature	git --git-dir=.git push -f origin x
+block	feature	git push --mi origin
+block	feature	git push --al origin
+block	feature	sudo -u git git push -f origin x
+block	feature	env -C ~/src/git git push -f origin x
+block	feature	xargs -a /tmp/git git push -f origin
+block	feature	timeout 10 /usr/bin/git push -f origin x
+block	feature	nohup gh pr merge 5 --admin
 # --- must stay allowed
 allow	feature	git push origin fix/main-detect
 allow	feature	git push -u origin fix/guard-bash-bypasses
@@ -118,3 +200,84 @@ allow	main	git pull
 allow	main	git push origin fix/x
 allow	main	git push origin v0.5.0
 allow	main	git push -u origin fix/x
+# --- review: must stay allowed
+allow	feature	git commit -m "Bump the -version flag"
+allow	feature	git commit -m "Allow -enable-foo"
+allow	feature	git checkout main && git pull && git switch -c fix/y && git push -u origin HEAD
+allow	feature	git checkout -b fix/y main && git push -u origin HEAD
+allow	feature	git checkout main -- go.mod && git push origin HEAD
+allow	main	git checkout main && git pull
+allow	main	git tag -s v0.5.0 -m "go-clamav v0.5.0"
+allow	main	git tag -v v0.5.0
+allow	main	git log -1 --format='%G?' v0.5.0
+allow	main	gh release create v0.5.0 --title "v0.5.0" --notes "x"
+allow	feature	gh api repos/{owner}/{repo}/commits/main --jq .commit.verification.verified
+allow	feature	gh run list --workflow CI --branch main -L 1
+allow	feature	gh pr create --title "Close bypasses" --body "Summary<NL><NL>- blocks git push -f behind env"
+allow	feature	gh pr create --title "x" --body "Never run gh pr merge --admin"
+allow	feature	gh pr merge 26 --merge --delete-branch
+allow	feature	git config --global gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers
+allow	feature	git push -u origin fix/x 2>&1 | tail -5
+allow	feature	git commit -F /tmp/msg
+allow	feature	time make verify
+allow	feature	env | grep -i git
+allow	feature	echo $(git rev-parse HEAD) > /tmp/sha
+allow	feature	git -c core.quotepath=off status
+allow	feature	git log --oneline origin/main..HEAD
+allow	feature	git diff origin/main...fix/guard-bash-bypasses
+allow	feature	git push --no-force-with-lease origin x
+allow	feature	git commit -S -m x
+allow	feature	git commit -m "x" --no-edit --amend
+allow	feature	git -c commit.gpgsign=yes commit -m x
+allow	feature	git -c commit.gpgsign commit -m x
+allow	feature	git push origin fix/x # done
+allow	feature	git fetch origin main
+allow	feature	git pull origin main
+allow	feature	git rebase origin/main
+allow	feature	git switch main
+allow	main	git switch -c fix/z && git push -u origin fix/z
+# git rejects -U with a non-integer value, so -Unm is harmless
+allow	feature	git commit -Unm x
+# --- review: malformed input must exit 0 or 2, never error
+allow	feature	"
+allow	feature	\
+allow	feature	<
+allow	feature	>
+allow	feature	<<
+allow	feature	git -c
+allow	feature	git --config-env
+allow	feature	git --config-env=
+allow	feature	git push --
+allow	feature	git commit -
+allow	feature	git push -
+allow	feature	env
+allow	feature	!
+allow	feature	{
+allow	feature	git
+allow	feature	gh
+allow	feature	sudo
+allow	feature	git push >
+allow	feature	git push 2>
+allow	feature	x=1
+allow	feature	=
+allow	feature	[
+allow	feature	*
+allow	feature	git commit --=x
+allow	feature	git -c=x push
+allow	feature	GIT_CONFIG_=x
+allow	feature	if
+allow	feature	git checkout
+allow	feature	git push @
+allow	feature	''
+allow	feature	""git""
+allow	feature	$()
+allow	feature	`
+allow	feature	((
+allow	feature	))
+# --- known false blocks: quoted text is not parsed, and a wrapper's next
+# git word is checked. Commit with -F FILE to avoid the first kind.
+block	feature	git commit -m "Reject -inf and -nan values"
+block	feature	git commit -m "Block git commit -nm in the guard"
+block	feature	sh -c "echo git push --force"
+block	feature	bash -c 'grep -rn "git push --force" docs'
+block	feature	git config --get core.hooksPath
