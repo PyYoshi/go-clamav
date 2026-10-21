@@ -6,6 +6,51 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A regression table for the Claude Code git-command guard
+  (`scripts/testdata/guard-bash-cases.tsv`, run by
+  `scripts/test-guard-bash.sh` and `make test-hooks`) runs in
+  `make verify` and in the CI `lint` job. A local run without `jq`
+  skips it with a warning; in CI a missing `jq` fails the job.
+
+### Fixed
+
+- The Claude Code git-command guard (`.claude/hooks/guard-bash.sh`) now
+  catches blocked commands written in other forms: git or gh behind a
+  variable assignment, a path, a shell keyword or a wrapper (`env`,
+  `sudo`, `sh -c`, `xargs`, ...), quoted words, short-option clusters
+  (`-nm`, `-uf`), the long-option abbreviations git accepts
+  (`--no-verif`, `--m` for `--mirror`), `@` for HEAD, words glued to a
+  redirection (`-f>/dev/null`), redirections, comments and `-o` values
+  that hid a push from main, backslash-continued lines, options written
+  after a `$(...)` or backtick substitution
+  (`git commit -m "$(cat <<EOF ...)" --no-verify`), a Co-Authored-By
+  trailer on a later line of the command, and a push after
+  `git checkout main` in the same command line.
+- It also blocks `--no-verify`/`--no-gpg-sign` on every git command,
+  `git push --all`/`--branches`/`--mirror`, matching and brace-expanded
+  refspecs and wildcard refspecs that match main, `git send-pack`,
+  signing and `core.hooksPath` overrides through `--config-env` or
+  `GIT_CONFIG_*` variables, aliases, mirror remotes, push refspecs and a
+  `push.default` that can push main (`matching`, `upstream`) set through
+  `git -c`, `GIT_CONFIG_*` or `git config`, `git remote --mirror`,
+  `git -c commit.gpgsign` values other than true, yes, on or 1,
+  `git config` unsetting, emptying or removing the signing and hooks
+  settings, and gh aliases carrying `--admin`.
+- Each command line is read twice, as written and normalized, then twice
+  more with each substitution replaced by one word if it has one, and
+  twice more with the separators inside quotes turned into spaces if it
+  has quotes (`git commit -m "feat(proto): x" --no-verify`). It is
+  blocked if any reading blocks it, so normalization cannot hide a
+  command the guard blocked before. A hook that times out lets the
+  command through, so the extra readings are kept cheap: segments that
+  name neither git nor gh are skipped and the whole-line trailer search
+  runs once, which keeps a 1 MB heredoc command at about 4 s against the
+  15 s hook timeout. Its comments no longer claim that only false blocks
+  are possible: it remains an advisory layer, and rulesets and CI stay
+  authoritative.
+
 ## [0.4.0] - 2026-10-14
 
 ### Changed

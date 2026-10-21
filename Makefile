@@ -21,6 +21,10 @@ test: ## Unit tests (no Docker required)
 fuzz: ## Short fuzzing pass over the reply parser and reply readers
 	./scripts/fuzz.sh
 
+.PHONY: test-hooks
+test-hooks: ## Regression table for the Claude Code git-command guard
+	./scripts/test-guard-bash.sh
+
 .PHONY: integration-up
 integration-up: ## Start the clamd test container
 	mkdir -p docker/run
@@ -51,6 +55,7 @@ verify: ## Full local verification (build + lint + test); records success for th
 	$(GO) build -tags=integration ./...
 	$(MAKE) lint
 	$(MAKE) test
+	$(MAKE) test-hooks
 	./scripts/record-verified.sh
 
 .PHONY: setup

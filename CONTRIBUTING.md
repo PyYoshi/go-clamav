@@ -8,7 +8,9 @@ file covers the mechanics.
 
 - Go 1.27+ (`go.mod` pins the floor; `GOTOOLCHAIN=auto` fetches it).
 - Docker with the compose plugin (integration tests).
-- `jq` (used by the Claude Code guard hooks; optional otherwise).
+- `jq` (used by the Claude Code guard hooks; optional otherwise —
+  `make verify` skips the guard-hook table without it, and CI always runs
+  that table).
 
 Then, once per clone:
 
@@ -50,6 +52,7 @@ SSH key, so check `%G?` on the commits you authored.
 | `make verify` | Build (incl. integration tags) + lint + tests |
 | `make integration` | End-to-end tests against dockerized clamd |
 | `make fuzz` | Short fuzz pass over the reply parser and reply readers |
+| `make test-hooks` | Regression table for the Claude Code git-command guard (part of `make verify`) |
 
 `make verify` is the Definition-of-Done gate: run it before every push.
 

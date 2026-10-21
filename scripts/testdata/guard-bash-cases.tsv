@@ -1,0 +1,435 @@
+# Regression table for .claude/hooks/guard-bash.sh, run by
+# scripts/test-guard-bash.sh (make verify, CI lint job).
+#
+# Columns, tab-separated: expect (block | allow), the branch the scratch
+# repository is on (main | feature), and the Bash command as Claude Code
+# passes it. <NL> in a command becomes a newline.
+#
+# --- blocked since the hook was added
+block	feature	git commit -m "x" --no-verify
+block	feature	git commit -n -m x
+block	feature	git commit --no-gpg-sign -m x
+block	feature	git commit -m "fix" -m "Co-Authored-By: a <a@b>"
+block	feature	git merge --no-verify topic
+block	feature	git merge --no-gpg-sign topic
+block	feature	git push --force origin fix/x
+block	feature	git push -f origin fix/x
+block	feature	git push --force-with-lease origin fix/x
+block	feature	git push --force-with-lease=fix/x origin fix/x
+block	feature	git push --force-if-includes origin fix/x
+block	feature	git push origin +fix/x
+block	feature	git push origin main
+block	feature	git push origin HEAD:main
+block	feature	git push origin fix/x:refs/heads/main
+block	feature	git push --no-verify origin fix/x
+block	main	git push
+block	main	git push -u origin
+block	main	git push origin HEAD
+block	feature	git -c commit.gpgsign=false commit -m x
+block	feature	git -ccommit.gpgsign=false commit -m x
+block	feature	git -c core.hooksPath=/dev/null commit -m x
+block	feature	git config commit.gpgsign false
+block	feature	git config core.hooksPath /tmp/h
+block	feature	gh pr merge 5 --admin --merge
+block	feature	cd /tmp && git push --force origin x
+block	feature	echo $(git push -f origin x)
+# --- command word behind assignments, paths, quotes, keywords, wrappers
+block	feature	env git push -f origin fix/x
+block	feature	/usr/bin/git push -f origin fix/x
+block	feature	\git push -f origin fix/x
+block	feature	"git" push -f origin fix/x
+block	feature	command git push --force origin fix/x
+block	feature	GIT_TERMINAL_PROMPT=0 git push --force origin fix/x
+block	feature	sh -c "git push -f origin fix/x"
+block	feature	bash -lc 'git commit --no-verify -m x'
+block	feature	eval "git push --force origin x"
+block	feature	sudo -u root git push -f origin x
+block	feature	timeout 10 git push -f origin x
+block	feature	nice -n 5 git push -f origin x
+block	feature	env -u FOO GIT_X=1 nohup git push -f origin x
+block	feature	if git push -f origin x; then echo ok; fi
+block	feature	echo x | xargs git push -f origin
+block	feature	env gh pr merge 5 --admin
+block	feature	gh pr merge 5 "--admin"
+# --- short-option clusters and long-option abbreviations
+block	feature	git commit -nm x
+block	feature	git commit -anm x
+block	feature	git commit --no-verif -m x
+block	feature	git commit --no-veri -m x
+block	feature	git commit --no-g -m x
+block	feature	git merge --no-verif topic
+block	feature	git push -uf origin x
+block	feature	git push -fu origin x
+block	feature	git push --forc origin x
+block	feature	git push --force-w origin x
+block	feature	git push --force-w=x origin x
+block	feature	git push --no-verif origin x
+# --- pushes that reach main
+block	feature	git push --all origin
+block	feature	git push --mirror origin
+block	feature	git push origin "main"
+block	feature	git push origin 'HEAD:main'
+block	main	git push origin @
+block	main	git push origin 2>&1
+block	main	git push origin > /tmp/log
+block	main	git push origin 2>/dev/null
+block	feature	git checkout main && git push
+block	feature	git switch main; git push origin
+block	feature	git checkout - && git push origin HEAD
+block	feature	git push \<NL>  --force origin x
+# --- signing and hooksPath overrides
+block	feature	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x
+block	feature	GIT_CONFIG_PARAMETERS="'commit.gpgsign'='false'" git commit -m x
+block	feature	export GIT_CONFIG_KEY_0=commit.gpgsign
+block	feature	git --config-env=core.hooksPath=HP commit -m x
+block	feature	git --config-env commit.gpgsign=SIGN commit -m x
+block	feature	git -c commit.gpgsign= commit -m x
+block	feature	git config --unset commit.gpgsign
+# --- review: quoted or escaped ">", "<", "\" and "#" must not hide a word
+block	feature	git commit -m "a ->" --no-verify
+block	feature	git commit -m "see <" -n
+block	feature	git push -o "ci >" --force origin x
+block	feature	echo C:\\<NL>git push -f origin x
+block	feature	# force it \<NL>git push -f origin x
+block	feature	git push origin +x>/dev/null
+block	feature	git commit -m x --trailer "Co-Authored-By=<a@b>"
+block	feature	git commit -m "Co-Authored-By:<a@b>"
+block	feature	git -c core.hooksPath=/tmp/h>/dev/null commit -m x
+block	feature	git push origin x --force-with-lease=x:<sha>
+block	feature	git config commit.gpgsign false>/dev/null
+block	feature	gh pr merge 5 --subject "Merge a ->" --admin
+block	feature	git push --push-option=ci:main origin x
+block	feature	git>/dev/null push -f origin x
+block	feature	git push>/dev/null -f origin x
+# --- review: abbreviations, aliases, config entries, option values, comments, wrappers, other commands and push targets
+block	feature	git push --m origin
+block	feature	git push --branches origin
+block	feature	git push --b origin
+block	feature	GIT_CONFIG_PARAMETERS="'user.name'='x' 'core.hooksPath'='/dev/null'" git commit -m x
+block	feature	GIT_CONFIG_PARAMETERS="'user.name'='x' 'commit.gpgsign'='false'" git commit -m x
+block	feature	git push -f>/dev/null origin x
+block	feature	git push --force>log origin x
+block	feature	git push origin main>/dev/null
+block	feature	git push origin HEAD:main>/dev/null
+block	main	git push -o ci.skip origin
+block	main	git push origin -o ci.skip
+block	main	git push origin # done
+block	main	git push # push it
+block	feature	git push origin $'main'
+block	feature	git push origin $"main"
+block	feature	stdbuf -oL git push -f origin x
+block	feature	setsid git push -f origin x
+block	feature	ionice -c3 git push -f origin x
+block	feature	flock /tmp/l git push -f origin x
+block	feature	coproc git push -f origin x
+block	feature	unbuffer git push -f origin x
+block	feature	script -qc "git push -f origin x" /dev/null
+block	feature	fish -c "git push -f origin x"
+block	feature	busybox sh -c "git push -f origin x"
+block	feature	strace -f git push -f origin x
+block	feature	chronic git push -f origin x
+block	feature	time -p git push -f origin x
+block	feature	exec -a foo git push -f origin x
+block	feature	command -p git push -f origin x
+block	feature	sudo -E env GIT_TERMINAL_PROMPT=0 git push -f origin x
+block	feature	git checkout @{-1} && git push
+block	feature	git checkout --track origin/main && git push
+block	feature	git config commit.gpgsign ""
+block	feature	git config commit.gpgsign ''
+block	feature	git config --remove-section commit
+block	feature	git config --rename-section commit old
+block	feature	git commit -m "$(cat <<'EOF'<NL>Fix x<NL><NL>Co-Authored-By: Claude <noreply@anthropic.com><NL>EOF<NL>)"
+block	feature	git commit -m "Fix x<NL><NL>Co-Authored-By: a <a@b>"
+block	feature	git commit -F - <<EOF<NL>Fix<NL><NL>Co-Authored-By: a <a@b><NL>EOF
+block	feature	git pull --no-verify
+block	feature	git pull --no-gpg-sign
+block	feature	git rebase --no-gpg-sign origin/main
+block	feature	git cherry-pick --no-gpg-sign abc123
+block	feature	git revert --no-gpg-sign abc123
+block	feature	git am --no-verify x.patch
+block	feature	git push origin HEAD:heads/main
+block	feature	git push origin heads/main
+block	feature	git push origin :
+block	feature	git push origin "refs/heads/*"
+block	feature	git push origin "*:*"
+block	feature	git -c remote.origin.mirror=true push origin
+block	feature	git -c push.default=matching push
+block	feature	gh pr merge 5 --admin=true
+block	feature	git --attr-source HEAD push -f origin x
+block	feature	git -c alias.p="push -f" p origin x
+block	feature	git push origin {main,x}
+block	feature	git -C ../other push -f origin x
+block	feature	git --git-dir=.git push -f origin x
+block	feature	git push --mi origin
+block	feature	git push --al origin
+block	feature	sudo -u git git push -f origin x
+block	feature	env -C ~/src/git git push -f origin x
+block	feature	xargs -a /tmp/git git push -f origin
+block	feature	timeout 10 /usr/bin/git push -f origin x
+block	feature	nohup gh pr merge 5 --admin
+# --- must stay allowed
+allow	feature	git push origin fix/main-detect
+allow	feature	git push -u origin fix/guard-bash-bypasses
+allow	feature	git push origin HEAD
+allow	feature	git push
+allow	feature	git push origin fix/x 2>&1
+allow	feature	grep Co-Authored-By AGENTS.md
+allow	feature	grep -rn "git push --force" README.md
+allow	feature	git commit -m "msg" -S
+allow	feature	git commit -am "message"
+allow	feature	git commit -mn
+allow	feature	git commit --verbose -m x
+allow	feature	git commit --amend --no-edit
+allow	feature	git merge --no-ff topic
+allow	feature	git merge --no-verify-signatures topic
+allow	feature	git -c commit.gpgsign=true commit -m x
+allow	feature	git -c user.name=x commit -m x
+allow	feature	git log --format='%h %G?' origin/main..HEAD
+allow	feature	git switch -c fix/x origin/main && git push -u origin fix/x
+allow	feature	git checkout main && git pull
+allow	feature	env FOO=1 make test
+allow	feature	GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 git -C /repo ls-files
+allow	feature	command -v git
+allow	feature	bash scripts/fuzz.sh
+allow	feature	gh pr merge 5 --merge --delete-branch
+allow	feature	gh pr checks --watch
+allow	feature	git config --get commit.gpgsign
+allow	feature	echo "deploy main"
+allow	main	git status
+allow	main	git pull
+allow	main	git push origin fix/x
+allow	main	git push origin v0.5.0
+allow	main	git push -u origin fix/x
+# --- review: must stay allowed
+allow	feature	git commit -m "Bump the -version flag"
+allow	feature	git commit -m "Allow -enable-foo"
+allow	feature	git checkout main && git pull && git switch -c fix/y && git push -u origin HEAD
+allow	feature	git checkout -b fix/y main && git push -u origin HEAD
+allow	feature	git checkout main -- go.mod && git push origin HEAD
+allow	main	git checkout main && git pull
+allow	main	git tag -s v0.5.0 -m "go-clamav v0.5.0"
+allow	main	git tag -v v0.5.0
+allow	main	git log -1 --format='%G?' v0.5.0
+allow	main	gh release create v0.5.0 --title "v0.5.0" --notes "x"
+allow	feature	gh api repos/{owner}/{repo}/commits/main --jq .commit.verification.verified
+allow	feature	gh run list --workflow CI --branch main -L 1
+allow	feature	gh pr create --title "Close bypasses" --body "Summary<NL><NL>- blocks git push -f behind env"
+allow	feature	gh pr create --title "x" --body "Never run gh pr merge --admin"
+allow	feature	gh pr merge 26 --merge --delete-branch
+allow	feature	git config --global gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers
+allow	feature	git push -u origin fix/x 2>&1 | tail -5
+allow	feature	git commit -F /tmp/msg
+allow	feature	time make verify
+allow	feature	env | grep -i git
+allow	feature	echo $(git rev-parse HEAD) > /tmp/sha
+allow	feature	git -c core.quotepath=off status
+allow	feature	git log --oneline origin/main..HEAD
+allow	feature	git diff origin/main...fix/guard-bash-bypasses
+allow	feature	git push --no-force-with-lease origin x
+allow	feature	git commit -S -m x
+allow	feature	git commit -m "x" --no-edit --amend
+allow	feature	git -c commit.gpgsign=yes commit -m x
+allow	feature	git -c commit.gpgsign commit -m x
+allow	feature	git push origin fix/x # done
+allow	feature	git fetch origin main
+allow	feature	git pull origin main
+allow	feature	git rebase origin/main
+allow	feature	git switch main
+allow	main	git switch -c fix/z && git push -u origin fix/z
+# git rejects -U with a non-integer value, so -Unm is harmless
+allow	feature	git commit -Unm x
+# --- review: malformed input must exit 0 or 2, never error
+allow	feature	"
+allow	feature	\
+allow	feature	<
+allow	feature	>
+allow	feature	<<
+allow	feature	git -c
+allow	feature	git --config-env
+allow	feature	git --config-env=
+allow	feature	git push --
+allow	feature	git commit -
+allow	feature	git push -
+allow	feature	env
+allow	feature	!
+allow	feature	{
+allow	feature	git
+allow	feature	gh
+allow	feature	sudo
+allow	feature	git push >
+allow	feature	git push 2>
+allow	feature	x=1
+allow	feature	=
+allow	feature	[
+allow	feature	*
+allow	feature	git commit --=x
+allow	feature	git -c=x push
+allow	feature	GIT_CONFIG_=x
+allow	feature	if
+allow	feature	git checkout
+allow	feature	git push @
+allow	feature	''
+allow	feature	""git""
+allow	feature	$()
+allow	feature	`
+allow	feature	((
+allow	feature	))
+# --- known false blocks: quoted text is not parsed, and a wrapper's next
+# git word is checked. Commit with -F FILE to avoid the first kind.
+block	feature	git commit -m "Reject -inf and -nan values"
+block	feature	git commit -m "Block git commit -nm in the guard"
+block	feature	sh -c "echo git push --force"
+block	feature	bash -c 'grep -rn "git push --force" docs'
+block	feature	git config --get core.hooksPath
+# --- second review: config keys, split trailers, wrappers, checkout values, gh aliases, send-pack
+block	feature	git -c remote.origin.mirror push origin
+block	feature	GIT_CONFIG_PARAMETERS="'remote.origin.mirror'='true'" git push origin
+block	feature	git config remote.origin.mirror true && git push origin
+block	feature	git config alias.p "push -f" && git p origin x
+block	feature	git config push.default matching && git push
+block	feature	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0="push -f" git p origin x
+block	feature	git commit -m x -m "Co-Authored""-By: a <a@b>"
+block	feature	git commit -m x -m Co-Authored\-By:\ a\ \<a@b\>
+block	feature	gtimeout 10 git push -f origin x
+block	feature	caffeinate -i git push -f origin x
+block	feature	xcrun git push -f origin x
+block	feature	arch -arm64 git push -f origin x
+block	feature	chrt -f 1 git push -f origin x
+block	feature	taskset -c 0 git push -f origin x
+block	feature	watch git push -f origin x
+block	feature	runuser -u me -- git push -f origin x
+block	feature	systemd-run --user git push -f origin x
+block	feature	ssh localhost git push -f origin x
+block	feature	su -c "git push -f origin x"
+block	feature	git checkout -Bmain origin/main && git push origin HEAD
+block	feature	gh alias set pm "pr merge --admin"
+block	feature	git send-pack git@github.com:o/r.git main
+block	feature	git -c remote.origin.mirror=yes push origin
+block	feature	git --config-env=remote.origin.mirror=X push origin
+block	feature	git --super-prefix push -f origin x
+# --- second review: must stay allowed
+allow	feature	git push -u origin HEAD
+allow	feature	git stash push -m "wip"
+allow	feature	git push --set-upstream origin fix/x
+allow	feature	git push origin --delete fix/old
+allow	feature	git push origin :fix/old
+allow	feature	git push -o ci.skip origin fix/x
+allow	feature	git commit -m "fix: handle -race flag"
+allow	feature	git commit --fixup=HEAD
+allow	feature	git rebase --exec "make test" origin/main
+allow	feature	git commit -m "Use 2>&1 in docs"
+allow	feature	git -c push.default=current push -u origin HEAD
+allow	feature	git push origin "feature/*"
+allow	main	git checkout main && git pull && git push origin v0.5.0
+allow	feature	git switch -c fix/a origin/main && git commit -m x && git push -u origin fix/a
+allow	feature	gh pr view 26 --comments
+allow	feature	gh pr merge 26 --merge --delete-branch && git checkout main && git pull
+allow	feature	git log --no-walk --format=%H
+allow	feature	git worktree add ../wt -b fix/b origin/main
+# The old hook blocked these, but git or gh rejects them, or (-o HEAD)
+# HEAD is a push option and only x is pushed.
+allow	feature	git --attr-source commit -n -m x
+allow	main	git push -o HEAD origin x
+allow	feature	git push -x:main origin
+allow	feature	git push --x:main origin
+allow	feature	gh 5 pr merge --admin
+# --- third review: substitutions, push.default upstream, config option values, mirror remotes, refspec sides
+block	feature	git -C "$(pwd)" push -f origin x
+block	feature	git -C "$(git rev-parse --show-toplevel)" push --force origin x
+block	feature	git -C `pwd` push -f origin x
+block	feature	git commit -m "$(cat <<'EOF'<NL>Fix x<NL>EOF<NL>)" --no-verify
+block	feature	git commit -m "$(printf x)" -n
+block	feature	git config -f "$(git rev-parse --git-dir)/config" core.hooksPath /dev/null
+block	feature	git config -f "$(git rev-parse --git-dir)/config" commit.gpgsign false
+block	feature	git push origin "$(git branch --show-current):main"
+block	feature	git -C "$(pwd)" -c core.hooksPath=/dev/null commit -m x
+block	main	git -C "$(pwd)" push
+block	feature	git -c push.default=upstream push
+block	feature	git -c push.default=tracking push origin
+block	feature	git switch -c fix/x origin/main && git -c push.default=upstream push
+block	feature	git config push.default upstream && git push
+block	feature	GIT_CONFIG_PARAMETERS="'push.default'='upstream'" git push
+block	feature	git config --comment --list alias.p "push -f" && git p origin x
+block	feature	git config set --comment --list remote.origin.mirror true && git push origin
+block	feature	git config --comment -l push.default matching && git push
+block	feature	git remote add --mirror=push backup git@github.com:o/r.git && git push backup
+block	feature	git switch --force-create=main origin/main && git push origin HEAD
+block	feature	git push origin "*/main"
+block	feature	git push origin "refs/*:refs/*"
+block	feature	git push origin "m*"
+block	feature	git push origin "refs/heads/fix/*:refs/heads/*"
+block	feature	git push origin "*"
+block	feature	git config alias.p "push -f"
+block	feature	git config --add remote.origin.push refs/heads/main
+allow	feature	git config user.name "Foo Bar"
+allow	feature	git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+allow	feature	git config --get-regexp "^alias\."
+allow	feature	git config get alias.co
+allow	feature	git config list --show-origin
+allow	feature	git config alias.co
+allow	feature	git config --get remote.origin.push
+allow	feature	git config remote.origin.push
+allow	feature	git config push.default
+allow	feature	git config push.default current
+allow	feature	git config push.autoSetupRemote true
+allow	feature	git config --global init.defaultBranch main
+allow	feature	git config branch.fix/x.remote origin
+allow	feature	git config --file .gitmodules submodule.x.url u
+allow	feature	git config -l | grep alias
+allow	feature	git config --show-origin --get-all remote.origin.push
+allow	feature	git push origin "refs/heads/fix/*:refs/heads/fix/*"
+allow	feature	git config --unset alias.co
+allow	feature	git config --unset remote.origin.mirror
+allow	feature	git push origin "refs/heads/*:refs/heads/backup/*"
+allow	feature	ssh -T git@github.com
+allow	feature	watch -n 5 git status
+allow	feature	git config --type=bool --get commit.gpgsign
+allow	main	git push origin "refs/tags/*"
+block	feature	git push origin ":refs/heads/*"
+block	feature	git push origin "refs/heads/*:"
+block	feature	git push origin "refs/heads/m*:refs/heads/m*"
+block	feature	git push origin "heads/*:heads/*"
+allow	feature	git push origin "refs/heads/fix/*"
+allow	main	git push origin "refs/heads/fix/*"
+allow	feature	git config --get-all remote.origin.push refs/heads/main
+allow	feature	git config --get-regexp remote.origin.push x
+allow	feature	git config get --all alias.co
+# Every alias write is blocked, harmless ones included.
+block	feature	git config --global alias.co checkout
+# --- final review: quoted separators, substitutions with unbalanced parentheses, process substitution, --mi
+block	feature	git commit -m "feat(proto): x" --no-verify
+block	feature	git commit -m "Fix a; b" -n
+block	feature	git commit -m "a & b" --no-gpg-sign
+block	feature	git push origin x -o "a|b" --force
+block	feature	git commit -m "fix parser (ADR-0007)" --no-verify
+block	feature	git commit -m "$(cat <<'EOF'<NL>Summary<NL><NL>1) do x<NL>2) do y<NL>EOF<NL>)" --no-verify
+block	feature	git commit -m "$(cat <<'EOF'<NL>Fix (see ADR<NL>EOF<NL>)" --no-verify
+block	feature	git commit -F <(printf x) --no-verify
+block	feature	git commit -m "$(printf x)" --no-verify
+block	feature	git commit -m "`date`" --no-verify
+block	feature	git commit -m "$((1+2))" -n
+block	feature	git commit -m x $(: ) --no-verify
+allow	feature	echo "$(git rev-parse HEAD)" > /tmp/sha
+allow	feature	git log --format="%h" $(git merge-base HEAD origin/main)..HEAD
+allow	feature	gh pr create --title "x" --body "$(cat <<'EOF'<NL>## Summary<NL>- blocks force pushes<NL>EOF<NL>)"
+allow	feature	X=$(git branch --show-current) && git push -u origin "$X"
+allow	feature	git push -u origin "$(git branch --show-current)"
+allow	feature	git commit -m "$(cat <<'EOF'<NL>Fix<NL>EOF<NL>)"
+allow	main	git tag -s v0.5.0 -m "$(printf 'go-clamav v0.5.0')"
+allow	feature	test "$(git rev-parse --abbrev-ref HEAD)" = main || git push origin HEAD
+allow	feature	git commit -m "$(cat <<'EOF'<NL>Handle (nested) parens and it's fine<NL>EOF<NL>)"
+block	feature	git remote add --mi=push bk git@github.com:o/r.git
+# --- the segment prefilter must not skip words that drop $"/$' quoting
+block	feature	gi$"t" push -f origin x
+block	feature	gi$'t' push -f origin x
+block	feature	g$"i"t push -f origin x
+# --- known gaps (not run): ANSI-C escapes are not decoded, and a
+# branch-creating checkout clears an earlier checkout of main even when
+# it fails before a ;-separated push. The real HEAD is always checked.
+#	git push origin $'\155ain'
+#	git checkout main; git checkout -b fix/x; git push -u origin HEAD
+# A separator quoted inside a substitution, and a read or unset option
+# word inside a quoted config value, still hide a word from every reading.
+#	git commit -m "$(echo ")")" --no-verify
+#	git config alias.p "!sh -c 'git push -f origin x' --unset"
+#	git config alias.p "!sh -c 'git push -f origin x' --get"
