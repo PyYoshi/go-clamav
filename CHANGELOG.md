@@ -23,23 +23,28 @@ project adheres to [Semantic Versioning](https://semver.org/).
   (`-nm`, `-uf`), the long-option abbreviations git accepts
   (`--no-verif`, `--m` for `--mirror`), `@` for HEAD, words glued to a
   redirection (`-f>/dev/null`), redirections, comments and `-o` values
-  that hid a push from main, backslash-continued lines, a Co-Authored-By
+  that hid a push from main, backslash-continued lines, options written
+  after a `$(...)` or backtick substitution
+  (`git commit -m "$(cat <<EOF ...)" --no-verify`), a Co-Authored-By
   trailer on a later line of the command, and a push after
   `git checkout main` in the same command line.
 - It also blocks `--no-verify`/`--no-gpg-sign` on every git command,
   `git push --all`/`--branches`/`--mirror`, matching and brace-expanded
   refspecs and wildcard refspecs that match main, `git send-pack`,
   signing and `core.hooksPath` overrides through `--config-env` or
-  `GIT_CONFIG_*` variables, aliases, mirror remotes, push refspecs and
-  `push.default=matching` set through `git -c`, `GIT_CONFIG_*` or
-  `git config`, `git -c commit.gpgsign` values other than true, yes, on
-  or 1, `git config` unsetting, emptying or removing the signing and
-  hooks settings, and gh aliases carrying `--admin`.
-- Each command line is read twice, as written and normalized, and is
-  blocked if either reading blocks it, so normalization cannot hide a
-  command the guard blocked before. Its comments no longer claim that
-  only false blocks are possible: it remains an advisory layer, and
-  rulesets and CI stay authoritative.
+  `GIT_CONFIG_*` variables, aliases, mirror remotes, push refspecs and a
+  `push.default` that can push main (`matching`, `upstream`) set through
+  `git -c`, `GIT_CONFIG_*` or `git config`, `git remote --mirror`,
+  `git -c commit.gpgsign` values other than true, yes, on or 1,
+  `git config` unsetting, emptying or removing the signing and hooks
+  settings, and gh aliases carrying `--admin`.
+- Each command line is read twice, as written and normalized, and twice
+  more with each substitution replaced by one word when it has one. It is
+  blocked if any reading blocks it, so normalization cannot hide a
+  command the guard blocked before. The run time stays linear in the
+  command length, since a hook that times out lets the command through.
+  Its comments no longer claim that only false blocks are possible: it
+  remains an advisory layer, and rulesets and CI stay authoritative.
 
 ## [0.4.0] - 2026-10-14
 

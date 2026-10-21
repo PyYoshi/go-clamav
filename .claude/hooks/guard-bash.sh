@@ -12,7 +12,8 @@
 #     and any push targeting main; git send-pack (skips the pre-push hook)
 #   - git config / git -c / GIT_CONFIG_* changing commit.gpgsign or
 #     core.hooksPath, or defining aliases, mirror remotes, push refspecs or
-#     push.default=matching
+#     a push.default that can push main (matching, upstream); git remote
+#     --mirror
 #   - gh pr merge --admin (bypasses required checks), and gh aliases
 #     carrying --admin
 #
@@ -23,8 +24,10 @@
 #
 # Each command line is read twice and blocked if either reading blocks it:
 # once split as written, and once with continued lines joined, redirections
-# dropped and comments cut. Neither reading follows shell quoting, so quoted
-# text can cause a false block, or hide a word from one of the readings.
+# dropped and comments cut. A line with a $(...) or backtick substitution
+# is read twice more with each substitution replaced by one word. No
+# reading follows shell quoting, so quoted text can cause a false block, or
+# hide a word from some of the readings.
 #
 # Advisory layer: this is a string filter, not a shell parser. It cannot see
 # commands assembled at runtime (scripts, aliases, variables, exported
@@ -113,16 +116,17 @@ takes_next() {
 }
 
 # check_ref_config KEY VALUE: config that changes which refs a push selects
-# (a mirror remote, push refspecs, push.default=matching), or an alias that
-# can hide a blocked command. Shared by git -c, GIT_CONFIG_* and git config;
-# KEY and VALUE are lowercase.
+# (a mirror remote, push refspecs, a push.default that pushes main), or an
+# alias that can hide a blocked command. Shared by git -c, GIT_CONFIG_* and
+# git config; KEY and VALUE are lowercase. upstream (tracking) pushes to the
+# upstream, which is origin/main for a branch made from it.
 check_ref_config() {
   case "$1" in
   alias.*) block "defining a git alias can hide a blocked command" ;;
   remote.*.mirror | remote.*.push) block "a mirror remote or push refspecs in config can push main" ;;
   push.default)
     case "$2" in
-    matching) block "push.default=matching pushes every matching branch, including main" ;;
+    matching | upstream | tracking) block "push.default=$2 can push main" ;;
     esac
     ;;
   esac
@@ -165,7 +169,7 @@ check_config_env() {
       *commit.gpgsign*) block "overriding commit signing through GIT_CONFIG_* variables" ;;
       *core.hookspath*) block "overriding core.hooksPath through GIT_CONFIG_* variables bypasses the repository git hooks" ;;
       *alias.*) block "defining a git alias through GIT_CONFIG_* variables can hide a blocked command" ;;
-      *remote.*.mirror* | *remote.*.push* | *push.default*matching*)
+      *remote.*.mirror* | *remote.*.push* | *push.default*matching* | *push.default*upstream* | *push.default*tracking*)
         block "GIT_CONFIG_* variables changing which refs a push selects can push main"
         ;;
       esac
@@ -175,18 +179,21 @@ check_config_env() {
   done
 }
 
-# glob_names_main REFSPEC: a side of a wildcard refspec matches main.
+# glob_names_main REFSPEC: the wildcard refspec writes main. That is its
+# destination side, or the source side when there is no destination
+# (SRC or SRC:).
 glob_names_main() {
-  local side name
-  for side in "${1%%:*}" "${1#*:}"; do
-    side=${side#+}
-    for name in main refs/heads/main heads/main; do
-      # The refspec side is a glob, so the pattern stays unquoted.
-      # shellcheck disable=SC2254
-      case $name in
-      $side) return 0 ;;
-      esac
-    done
+  local side=${1#+} name
+  case "$side" in
+  *:?*) side=${side#*:} ;;
+  *:) side=${side%:} ;;
+  esac
+  for name in main refs/heads/main heads/main; do
+    # The refspec side is a glob, so the pattern stays unquoted.
+    # shellcheck disable=SC2254
+    case $name in
+    $side) return 0 ;;
+    esac
   done
   return 1
 }
@@ -244,10 +251,7 @@ check_git() {
 
   case "$sub" in
   commit)
-    # The trailer can sit on a later line of a multi-line message or a
-    # heredoc, so the whole command line is searched, without the quotes
-    # and backslashes that can split the word.
-    if grep -qi 'co-authored-by' <<<"${cmd//[\"\'\\]/}"; then
+    if [ "$has_trailer" = 1 ]; then
       block "Co-Authored-By trailers are not allowed in commit messages"
     fi
     for t in "${rest[@]}"; do
@@ -331,8 +335,8 @@ check_git() {
         [ "$j" -lt "${#rest[@]}" ] && return 0
         break
         ;;
-      -b | -B | -c | -C | --orphan) want=1 ;;
-      --orphan=*) created=${t#--orphan=} ;;
+      -b | -B | -c | -C | --orphan | --create | --force-create) want=1 ;;
+      --orphan=* | --create=* | --force-create=*) created=${t#*=} ;;
       -[bBcC]?*) created=${t:2} ;;
       -t | --track | --track=*) track=1 ;;
       -) [ -n "$target" ] || target=$t ;;
@@ -375,20 +379,29 @@ check_git() {
       ;;
     esac
     # Writes (KEY VALUE, or a write option or subcommand) go through the
-    # same key checks as git -c; reads stay allowed.
-    local keys=() read=0 write=0 k
+    # same key checks as git -c. Reads and unsets stay allowed; the value of
+    # an option such as --comment is skipped, so it cannot pass for --list.
+    local keys=() read=0 write=0 unset=0 optval=0 k
     for t in "${rest[@]}"; do
+      if [ "$optval" = 1 ]; then
+        optval=0
+        continue
+      fi
       case "$t" in
+      --comment | -f | --file | --blob | --type | --default | --value) optval=1 ;;
       --get | --get-all | --get-regexp | --get-urlmatch | --list | -l) read=1 ;;
-      --unset | --unset-all | --add | --replace-all) write=1 ;;
+      --unset | --unset-all) unset=1 ;;
+      --add | --replace-all) write=1 ;;
       -*) ;;
       *) keys+=("$(lc "$t")") ;;
       esac
     done
     case "${keys[0]}" in
     get | list) read=1 ;;
-    set | unset) write=1 ;;
+    set) write=1 ;;
+    unset) unset=1 ;;
     esac
+    [ "$unset" = 1 ] && [ "$write" = 0 ] && read=1
     if [ "$read" = 0 ] && { [ "$write" = 1 ] || [ "${#keys[@]}" -ge 2 ]; }; then
       k=0
       while [ "$k" -lt "${#keys[@]}" ]; do
@@ -399,6 +412,13 @@ check_git() {
     ;;
   send-pack)
     block "git send-pack pushes without the pre-push hook; use git push"
+    ;;
+  remote)
+    for t in "${rest[@]}"; do
+      case "$t" in
+      --mirror*) block "a mirror remote (git remote --mirror) force-pushes every ref, including main" ;;
+      esac
+    done
     ;;
   esac
 }
@@ -471,15 +491,17 @@ find_command() {
   done
 }
 
-# scan MODE: splits the command line on |, ;, &, backticks and parentheses
-# (the latter catch $(...) command substitutions and subshells), strips
-# quotes and backslashes, and checks every segment that runs git or gh.
-# Mode "joined" also joins backslash-continued lines, cuts comments and
-# drops redirections, keeping a word glued to one (-f>/dev/null). Mode
+# scan MODE TEXT: splits TEXT on |, ;, &, backticks and parentheses (the
+# latter catch $(...) command substitutions and subshells), strips quotes
+# and backslashes, and checks every segment that runs git or gh. Splitting
+# checks the command inside a substitution as its own segment, but cuts the
+# words after the substitution off from their command; flatten_subst covers
+# those. Mode "joined" also joins backslash-continued lines, cuts comments
+# and drops redirections, keeping a word glued to one (-f>/dev/null). Mode
 # "split" does none of that, so a quoted ">", "\" or "#" cannot hide a word
 # from both readings.
 scan() {
-  local input=$cmd t words skip
+  local input=$2 t words skip
   on_main=0
   [ "$1" = joined ] && input=${input//\\$'\n'/ }
   while IFS= read -r raw_seg; do
@@ -528,7 +550,43 @@ scan() {
   done < <(printf '%s\n' "$input" | tr '|;&`()' '\n')
 }
 
-scan split
-scan joined
+# flatten_subst TEXT: TEXT with each $(...) (nesting counted, across lines)
+# and each backtick pair replaced by one word, so the words after it stay
+# with their command (git commit -m "$(cat <<EOF ...)" --no-verify).
+flatten_subst() {
+  printf '%s' "$1" | awk 'BEGIN { RS = "\001"; ORS = "" }
+  {
+    depth = 0; tick = 0; out = ""; n = length($0)
+    for (i = 1; i <= n; i++) {
+      c = substr($0, i, 1)
+      if (tick) { if (c == "`") tick = 0; continue }
+      if (depth > 0) { if (c == "(") depth++; else if (c == ")") depth--; continue }
+      if (c == "$" && substr($0, i + 1, 1) == "(") { depth = 1; i++; out = out "SUBST"; continue }
+      if (c == "`") { tick = 1; out = out "SUBST"; continue }
+      out = out c
+    }
+    print out
+  }'
+}
+
+# A Co-Authored-By trailer can sit on a later line of a multi-line message
+# or a heredoc, so git commit checks the whole command line, without the
+# quotes and backslashes that can split the word. It is searched once here:
+# searching per segment made the hook quadratic in the command length, and
+# a hook that times out lets the command through.
+has_trailer=0
+if printf '%s' "$cmd" | tr -d "\"'\\\\" | grep -qi 'co-authored-by'; then
+  has_trailer=1
+fi
+
+scan split "$cmd"
+scan joined "$cmd"
+case "$cmd" in
+*\$\(* | *\`*)
+  flat=$(flatten_subst "$cmd")
+  scan split "$flat"
+  scan joined "$flat"
+  ;;
+esac
 
 exit 0

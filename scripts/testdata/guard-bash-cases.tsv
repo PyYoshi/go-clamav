@@ -333,6 +333,69 @@ allow	main	git push -o HEAD origin x
 allow	feature	git push -x:main origin
 allow	feature	git push --x:main origin
 allow	feature	gh 5 pr merge --admin
+# --- third review: substitutions, push.default upstream, config option values, mirror remotes, refspec sides
+block	feature	git -C "$(pwd)" push -f origin x
+block	feature	git -C "$(git rev-parse --show-toplevel)" push --force origin x
+block	feature	git -C `pwd` push -f origin x
+block	feature	git commit -m "$(cat <<'EOF'<NL>Fix x<NL>EOF<NL>)" --no-verify
+block	feature	git commit -m "$(printf x)" -n
+block	feature	git config -f "$(git rev-parse --git-dir)/config" core.hooksPath /dev/null
+block	feature	git config -f "$(git rev-parse --git-dir)/config" commit.gpgsign false
+block	feature	git push origin "$(git branch --show-current):main"
+block	feature	git -C "$(pwd)" -c core.hooksPath=/dev/null commit -m x
+block	main	git -C "$(pwd)" push
+block	feature	git -c push.default=upstream push
+block	feature	git -c push.default=tracking push origin
+block	feature	git switch -c fix/x origin/main && git -c push.default=upstream push
+block	feature	git config push.default upstream && git push
+block	feature	GIT_CONFIG_PARAMETERS="'push.default'='upstream'" git push
+block	feature	git config --comment --list alias.p "push -f" && git p origin x
+block	feature	git config set --comment --list remote.origin.mirror true && git push origin
+block	feature	git config --comment -l push.default matching && git push
+block	feature	git remote add --mirror=push backup git@github.com:o/r.git && git push backup
+block	feature	git switch --force-create=main origin/main && git push origin HEAD
+block	feature	git push origin "*/main"
+block	feature	git push origin "refs/*:refs/*"
+block	feature	git push origin "m*"
+block	feature	git push origin "refs/heads/fix/*:refs/heads/*"
+block	feature	git push origin "*"
+block	feature	git config alias.p "push -f"
+block	feature	git config --add remote.origin.push refs/heads/main
+allow	feature	git config user.name "Foo Bar"
+allow	feature	git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+allow	feature	git config --get-regexp "^alias\."
+allow	feature	git config get alias.co
+allow	feature	git config list --show-origin
+allow	feature	git config alias.co
+allow	feature	git config --get remote.origin.push
+allow	feature	git config remote.origin.push
+allow	feature	git config push.default
+allow	feature	git config push.default current
+allow	feature	git config push.autoSetupRemote true
+allow	feature	git config --global init.defaultBranch main
+allow	feature	git config branch.fix/x.remote origin
+allow	feature	git config --file .gitmodules submodule.x.url u
+allow	feature	git config -l | grep alias
+allow	feature	git config --show-origin --get-all remote.origin.push
+allow	feature	git push origin "refs/heads/fix/*:refs/heads/fix/*"
+allow	feature	git config --unset alias.co
+allow	feature	git config --unset remote.origin.mirror
+allow	feature	git push origin "refs/heads/*:refs/heads/backup/*"
+allow	feature	ssh -T git@github.com
+allow	feature	watch -n 5 git status
+allow	feature	git config --type=bool --get commit.gpgsign
+allow	main	git push origin "refs/tags/*"
+block	feature	git push origin ":refs/heads/*"
+block	feature	git push origin "refs/heads/*:"
+block	feature	git push origin "refs/heads/m*:refs/heads/m*"
+block	feature	git push origin "heads/*:heads/*"
+allow	feature	git push origin "refs/heads/fix/*"
+allow	main	git push origin "refs/heads/fix/*"
+allow	feature	git config --get-all remote.origin.push refs/heads/main
+allow	feature	git config --get-regexp remote.origin.push x
+allow	feature	git config get --all alias.co
+# Every alias write is blocked, harmless ones included.
+block	feature	git config --global alias.co checkout
 # --- known gaps (not run): ANSI-C escapes are not decoded, and a
 # branch-creating checkout clears an earlier checkout of main even when
 # it fails before a ;-separated push. The real HEAD is always checked.
