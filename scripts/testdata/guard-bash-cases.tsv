@@ -1,0 +1,120 @@
+# Regression table for .claude/hooks/guard-bash.sh, run by
+# scripts/test-guard-bash.sh (make verify, CI lint job).
+#
+# Columns, tab-separated: expect (block | allow), the branch the scratch
+# repository is on (main | feature), and the Bash command as Claude Code
+# passes it. <NL> in a command becomes a newline.
+#
+# --- blocked since the hook was added
+block	feature	git commit -m "x" --no-verify
+block	feature	git commit -n -m x
+block	feature	git commit --no-gpg-sign -m x
+block	feature	git commit -m "fix" -m "Co-Authored-By: a <a@b>"
+block	feature	git merge --no-verify topic
+block	feature	git merge --no-gpg-sign topic
+block	feature	git push --force origin fix/x
+block	feature	git push -f origin fix/x
+block	feature	git push --force-with-lease origin fix/x
+block	feature	git push --force-with-lease=fix/x origin fix/x
+block	feature	git push --force-if-includes origin fix/x
+block	feature	git push origin +fix/x
+block	feature	git push origin main
+block	feature	git push origin HEAD:main
+block	feature	git push origin fix/x:refs/heads/main
+block	feature	git push --no-verify origin fix/x
+block	main	git push
+block	main	git push -u origin
+block	main	git push origin HEAD
+block	feature	git -c commit.gpgsign=false commit -m x
+block	feature	git -ccommit.gpgsign=false commit -m x
+block	feature	git -c core.hooksPath=/dev/null commit -m x
+block	feature	git config commit.gpgsign false
+block	feature	git config core.hooksPath /tmp/h
+block	feature	gh pr merge 5 --admin --merge
+block	feature	cd /tmp && git push --force origin x
+block	feature	echo $(git push -f origin x)
+# --- command word behind assignments, paths, quotes, keywords, wrappers
+block	feature	env git push -f origin fix/x
+block	feature	/usr/bin/git push -f origin fix/x
+block	feature	\git push -f origin fix/x
+block	feature	"git" push -f origin fix/x
+block	feature	command git push --force origin fix/x
+block	feature	GIT_TERMINAL_PROMPT=0 git push --force origin fix/x
+block	feature	sh -c "git push -f origin fix/x"
+block	feature	bash -lc 'git commit --no-verify -m x'
+block	feature	eval "git push --force origin x"
+block	feature	sudo -u root git push -f origin x
+block	feature	timeout 10 git push -f origin x
+block	feature	nice -n 5 git push -f origin x
+block	feature	env -u FOO GIT_X=1 nohup git push -f origin x
+block	feature	if git push -f origin x; then echo ok; fi
+block	feature	echo x | xargs git push -f origin
+block	feature	env gh pr merge 5 --admin
+block	feature	gh pr merge 5 "--admin"
+# --- short-option clusters and long-option abbreviations
+block	feature	git commit -nm x
+block	feature	git commit -anm x
+block	feature	git commit --no-verif -m x
+block	feature	git commit --no-veri -m x
+block	feature	git commit --no-g -m x
+block	feature	git merge --no-verif topic
+block	feature	git push -uf origin x
+block	feature	git push -fu origin x
+block	feature	git push --forc origin x
+block	feature	git push --force-w origin x
+block	feature	git push --force-w=x origin x
+block	feature	git push --no-verif origin x
+# --- pushes that reach main
+block	feature	git push --all origin
+block	feature	git push --mirror origin
+block	feature	git push origin "main"
+block	feature	git push origin 'HEAD:main'
+block	main	git push origin @
+block	main	git push origin 2>&1
+block	main	git push origin > /tmp/log
+block	main	git push origin 2>/dev/null
+block	feature	git checkout main && git push
+block	feature	git switch main; git push origin
+block	feature	git checkout - && git push origin HEAD
+block	feature	git push \<NL>  --force origin x
+# --- signing and hooksPath overrides
+block	feature	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x
+block	feature	GIT_CONFIG_PARAMETERS="'commit.gpgsign'='false'" git commit -m x
+block	feature	export GIT_CONFIG_KEY_0=commit.gpgsign
+block	feature	git --config-env=core.hooksPath=HP commit -m x
+block	feature	git --config-env commit.gpgsign=SIGN commit -m x
+block	feature	git -c commit.gpgsign= commit -m x
+block	feature	git config --unset commit.gpgsign
+# --- must stay allowed
+allow	feature	git push origin fix/main-detect
+allow	feature	git push -u origin fix/guard-bash-bypasses
+allow	feature	git push origin HEAD
+allow	feature	git push
+allow	feature	git push origin fix/x 2>&1
+allow	feature	grep Co-Authored-By AGENTS.md
+allow	feature	grep -rn "git push --force" README.md
+allow	feature	git commit -m "msg" -S
+allow	feature	git commit -am "message"
+allow	feature	git commit -mn
+allow	feature	git commit --verbose -m x
+allow	feature	git commit --amend --no-edit
+allow	feature	git merge --no-ff topic
+allow	feature	git merge --no-verify-signatures topic
+allow	feature	git -c commit.gpgsign=true commit -m x
+allow	feature	git -c user.name=x commit -m x
+allow	feature	git log --format='%h %G?' origin/main..HEAD
+allow	feature	git switch -c fix/x origin/main && git push -u origin fix/x
+allow	feature	git checkout main && git pull
+allow	feature	env FOO=1 make test
+allow	feature	GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 git -C /repo ls-files
+allow	feature	command -v git
+allow	feature	bash scripts/fuzz.sh
+allow	feature	gh pr merge 5 --merge --delete-branch
+allow	feature	gh pr checks --watch
+allow	feature	git config --get commit.gpgsign
+allow	feature	echo "deploy main"
+allow	main	git status
+allow	main	git pull
+allow	main	git push origin fix/x
+allow	main	git push origin v0.5.0
+allow	main	git push -u origin fix/x

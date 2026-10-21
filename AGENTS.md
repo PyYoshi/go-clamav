@@ -166,10 +166,12 @@ See CONTRIBUTING.md for the full pull-request and review workflow.
 | `make test` | go vet + race-enabled unit tests |
 | `make integration` | End-to-end tests against dockerized clamd |
 | `make fuzz` | Short fuzz pass over the reply parser and reply readers |
+| `make test-hooks` | Regression table for the Claude Code git-command guard (part of `make verify`) |
 
 ## Harness layout
 
-- `scripts/` — shared guard logic (EICAR scan, verified-state recording)
+- `scripts/` — shared guard logic (EICAR scan, verified-state recording,
+  the git-command guard's regression table)
 - `githooks/` — commit-msg / pre-commit / pre-push (enabled by `make setup`)
 - `.claude/` — Claude Code hooks (EICAR guard, git-command guard, stop-time
   DoD check) and skills (`pr-flow`, `release`)

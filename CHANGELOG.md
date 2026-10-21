@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A regression table for the Claude Code git-command guard
+  (`scripts/testdata/guard-bash-cases.tsv`, run by
+  `scripts/test-guard-bash.sh` and `make test-hooks`) runs in
+  `make verify` and in the CI `lint` job. A local run without `jq`
+  skips it with a warning; in CI a missing `jq` fails the job.
+
 ### Fixed
 
 - The Claude Code git-command guard (`.claude/hooks/guard-bash.sh`) now

@@ -39,6 +39,8 @@ jobs:
           fetch-depth: 0 # full history: gitleaks scans every commit
       - name: EICAR plaintext guard
         run: bash ./scripts/check-eicar.sh tracked
+      - name: Claude Code git-command guard table
+        run: bash ./scripts/test-guard-bash.sh
       - name: Zero-dependency policy (ADR-0003)
         run: |
           if grep -Eq '^require' go.mod; then

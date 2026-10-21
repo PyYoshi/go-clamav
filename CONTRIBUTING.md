@@ -8,7 +8,9 @@ file covers the mechanics.
 
 - Go 1.27+ (`go.mod` pins the floor; `GOTOOLCHAIN=auto` fetches it).
 - Docker with the compose plugin (integration tests).
-- `jq` (used by the Claude Code guard hooks; optional otherwise).
+- `jq` (used by the Claude Code guard hooks; optional otherwise —
+  `make verify` skips the guard-hook table without it, and CI always runs
+  that table).
 
 Then, once per clone:
 
