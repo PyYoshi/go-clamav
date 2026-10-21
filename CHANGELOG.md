@@ -27,12 +27,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
   trailer on a later line of the command, and a push after
   `git checkout main` in the same command line.
 - It also blocks `--no-verify`/`--no-gpg-sign` on every git command,
-  `git push --all`/`--branches`/`--mirror` and matching, wildcard or
-  brace-expanded refspecs, signing and `core.hooksPath` overrides through
-  `--config-env` or `GIT_CONFIG_*` variables, `git -c` alias and
-  push-refspec definitions, `git -c commit.gpgsign` values other than
-  true, yes, on or 1, and `git config` unsetting, emptying or removing
-  the signing and hooks settings.
+  `git push --all`/`--branches`/`--mirror`, matching and brace-expanded
+  refspecs and wildcard refspecs that match main, `git send-pack`,
+  signing and `core.hooksPath` overrides through `--config-env` or
+  `GIT_CONFIG_*` variables, aliases, mirror remotes, push refspecs and
+  `push.default=matching` set through `git -c`, `GIT_CONFIG_*` or
+  `git config`, `git -c commit.gpgsign` values other than true, yes, on
+  or 1, `git config` unsetting, emptying or removing the signing and
+  hooks settings, and gh aliases carrying `--admin`.
 - Each command line is read twice, as written and normalized, and is
   blocked if either reading blocks it, so normalization cannot hide a
   command the guard blocked before. Its comments no longer claim that

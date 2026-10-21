@@ -8,10 +8,13 @@
 #   - git commit when the command line carries a Co-Authored-By trailer
 #   - --no-verify / --no-gpg-sign on any git command (-n on commit)
 #   - git push --force / +refspec / --all / --branches / --mirror, matching
-#     (:), wildcard and brace-expanded refspecs, and any push targeting main
+#     (:) and brace-expanded refspecs, wildcard refspecs that match main,
+#     and any push targeting main; git send-pack (skips the pre-push hook)
 #   - git config / git -c / GIT_CONFIG_* changing commit.gpgsign or
-#     core.hooksPath, and git -c defining aliases or push refspecs
-#   - gh pr merge --admin (bypasses required checks)
+#     core.hooksPath, or defining aliases, mirror remotes, push refspecs or
+#     push.default=matching
+#   - gh pr merge --admin (bypasses required checks), and gh aliases
+#     carrying --admin
 #
 # git and gh are found behind variable assignments, a path (/usr/bin/git),
 # shell keywords and wrappers that run a command (env, sudo, sh -c, xargs,
@@ -109,9 +112,26 @@ takes_next() {
   return 1
 }
 
-# check_config_pair OPTION KEY=VALUE: git -c and --config-env set config for
-# one invocation. Only an explicit true keeps signing on; a --config-env
-# value names an environment variable, so it is never trusted.
+# check_ref_config KEY VALUE: config that changes which refs a push selects
+# (a mirror remote, push refspecs, push.default=matching), or an alias that
+# can hide a blocked command. Shared by git -c, GIT_CONFIG_* and git config;
+# KEY and VALUE are lowercase.
+check_ref_config() {
+  case "$1" in
+  alias.*) block "defining a git alias can hide a blocked command" ;;
+  remote.*.mirror | remote.*.push) block "a mirror remote or push refspecs in config can push main" ;;
+  push.default)
+    case "$2" in
+    matching) block "push.default=matching pushes every matching branch, including main" ;;
+    esac
+    ;;
+  esac
+}
+
+# check_config_pair OPTION KEY[=VALUE]: git -c and --config-env set config
+# for one invocation. Only an explicit true keeps signing on; a --config-env
+# value names an environment variable, so it is never trusted. A key
+# without =VALUE is a boolean true.
 check_config_pair() {
   local kv
   kv=$(lc "$2")
@@ -125,12 +145,10 @@ check_config_pair() {
     *) block "disabling commit signing (git -c commit.gpgsign=...)" ;;
     esac
     ;;
-  alias.*=*)
-    block "defining a git alias inline (git -c alias.*) can hide a blocked command"
-    ;;
-  remote.*.mirror=* | remote.*.push=* | push.default=*)
-    block "git -c changing which refs a push selects can push main"
-    ;;
+  esac
+  case "$kv" in
+  *=*) check_ref_config "${kv%%=*}" "${kv#*=}" ;;
+  *) check_ref_config "$kv" "" ;;
   esac
 }
 
@@ -138,18 +156,39 @@ check_config_pair() {
 # environment form of git -c and reach every git a command runs. One
 # variable can carry several entries, so the whole segment is searched.
 check_config_env() {
-  local t
+  local t s
   for t in "$@"; do
     case "$t" in
     GIT_CONFIG_PARAMETERS=* | GIT_CONFIG_COUNT=* | GIT_CONFIG_KEY_*=* | GIT_CONFIG_VALUE_*=*)
-      case "$(lc "$*")" in
+      s=$(lc "$*")
+      case "$s" in
       *commit.gpgsign*) block "overriding commit signing through GIT_CONFIG_* variables" ;;
       *core.hookspath*) block "overriding core.hooksPath through GIT_CONFIG_* variables bypasses the repository git hooks" ;;
+      *alias.*) block "defining a git alias through GIT_CONFIG_* variables can hide a blocked command" ;;
+      *remote.*.mirror* | *remote.*.push* | *push.default*matching*)
+        block "GIT_CONFIG_* variables changing which refs a push selects can push main"
+        ;;
       esac
       return
       ;;
     esac
   done
+}
+
+# glob_names_main REFSPEC: a side of a wildcard refspec matches main.
+glob_names_main() {
+  local side name
+  for side in "${1%%:*}" "${1#*:}"; do
+    side=${side#+}
+    for name in main refs/heads/main heads/main; do
+      # The refspec side is a glob, so the pattern stays unquoted.
+      # shellcheck disable=SC2254
+      case $name in
+      $side) return 0 ;;
+      esac
+    done
+  done
+  return 1
 }
 
 check_git() {
@@ -175,7 +214,7 @@ check_git() {
       i=$((i + 1))
       continue
       ;;
-    -C | --git-dir | --work-tree | --namespace | --exec-path | --attr-source | --super-prefix)
+    -C | --git-dir | --work-tree | --namespace | --exec-path | --attr-source)
       i=$((i + 2))
       continue
       ;;
@@ -206,8 +245,9 @@ check_git() {
   case "$sub" in
   commit)
     # The trailer can sit on a later line of a multi-line message or a
-    # heredoc, so the whole command line is searched.
-    if grep -qi 'co-authored-by' <<<"$cmd"; then
+    # heredoc, so the whole command line is searched, without the quotes
+    # and backslashes that can split the word.
+    if grep -qi 'co-authored-by' <<<"${cmd//[\"\'\\]/}"; then
       block "Co-Authored-By trailers are not allowed in commit messages"
     fi
     for t in "${rest[@]}"; do
@@ -256,7 +296,10 @@ check_git() {
         block "pushing to main directly is not allowed; open a pull request"
         ;;
       :) block "git push : pushes every matching branch, including main" ;;
-      *\**) block "wildcard refspecs push every matching branch, including main" ;;
+      *\**)
+        glob_names_main "$t" && block "a wildcard refspec that matches main pushes main"
+        [ "$isvalue" = 1 ] || nonopt+=("$t")
+        ;;
       *{*,*}* | *{*..*}*) block "brace-expanded push arguments can name main" ;;
       *) [ "$isvalue" = 1 ] || nonopt+=("$t") ;;
       esac
@@ -289,6 +332,8 @@ check_git() {
         break
         ;;
       -b | -B | -c | -C | --orphan) want=1 ;;
+      --orphan=*) created=${t#--orphan=} ;;
+      -[bBcC]?*) created=${t:2} ;;
       -t | --track | --track=*) track=1 ;;
       -) [ -n "$target" ] || target=$t ;;
       -*) ;;
@@ -303,7 +348,7 @@ check_git() {
       esac
     else
       case "$target" in
-      main | - | @{-*}) on_main=1 ;;
+      main | - | @\{-*\}) on_main=1 ;;
       esac
     fi
     ;;
@@ -329,6 +374,31 @@ check_git() {
       done
       ;;
     esac
+    # Writes (KEY VALUE, or a write option or subcommand) go through the
+    # same key checks as git -c; reads stay allowed.
+    local keys=() read=0 write=0 k
+    for t in "${rest[@]}"; do
+      case "$t" in
+      --get | --get-all | --get-regexp | --get-urlmatch | --list | -l) read=1 ;;
+      --unset | --unset-all | --add | --replace-all) write=1 ;;
+      -*) ;;
+      *) keys+=("$(lc "$t")") ;;
+      esac
+    done
+    case "${keys[0]}" in
+    get | list) read=1 ;;
+    set | unset) write=1 ;;
+    esac
+    if [ "$read" = 0 ] && { [ "$write" = 1 ] || [ "${#keys[@]}" -ge 2 ]; }; then
+      k=0
+      while [ "$k" -lt "${#keys[@]}" ]; do
+        check_ref_config "${keys[$k]}" "${keys[$((k + 1))]}"
+        k=$((k + 1))
+      done
+    fi
+    ;;
+  send-pack)
+    block "git send-pack pushes without the pre-push hook; use git push"
     ;;
   esac
 }
@@ -356,6 +426,9 @@ check_gh() {
   if [ "${pos[0]}" = pr ] && [ "${pos[1]}" = merge ] && [ "$admin" = 0 ]; then
     block "gh pr merge --admin bypasses the required status checks"
   fi
+  if [ "${pos[0]}" = alias ] && [ "${pos[1]}" = set ] && [ "$admin" = 0 ]; then
+    block "a gh alias carrying --admin can hide gh pr merge --admin"
+  fi
 }
 
 # find_command WORD...: sets cmd_idx to the indexes of the command words to
@@ -378,7 +451,8 @@ find_command() {
     '!' | '{' | if | then | elif | else | do | while | until) ;;
     env | command | builtin | exec | eval | nohup | nice | time | timeout | sudo | doas | su | xargs | \
       sh | bash | zsh | dash | ksh | fish | busybox | script | stdbuf | setsid | ionice | flock | \
-      unbuffer | chronic | strace | coproc)
+      unbuffer | chronic | strace | coproc | gtimeout | caffeinate | xcrun | arch | chrt | taskset | \
+      watch | runuser | systemd-run | ssh)
       i=$((i + 1))
       while [ "$i" -lt "${#words[@]}" ]; do
         case "${words[$i]##*/}" in

@@ -281,3 +281,60 @@ block	feature	git commit -m "Block git commit -nm in the guard"
 block	feature	sh -c "echo git push --force"
 block	feature	bash -c 'grep -rn "git push --force" docs'
 block	feature	git config --get core.hooksPath
+# --- second review: config keys, split trailers, wrappers, checkout values, gh aliases, send-pack
+block	feature	git -c remote.origin.mirror push origin
+block	feature	GIT_CONFIG_PARAMETERS="'remote.origin.mirror'='true'" git push origin
+block	feature	git config remote.origin.mirror true && git push origin
+block	feature	git config alias.p "push -f" && git p origin x
+block	feature	git config push.default matching && git push
+block	feature	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0="push -f" git p origin x
+block	feature	git commit -m x -m "Co-Authored""-By: a <a@b>"
+block	feature	git commit -m x -m Co-Authored\-By:\ a\ \<a@b\>
+block	feature	gtimeout 10 git push -f origin x
+block	feature	caffeinate -i git push -f origin x
+block	feature	xcrun git push -f origin x
+block	feature	arch -arm64 git push -f origin x
+block	feature	chrt -f 1 git push -f origin x
+block	feature	taskset -c 0 git push -f origin x
+block	feature	watch git push -f origin x
+block	feature	runuser -u me -- git push -f origin x
+block	feature	systemd-run --user git push -f origin x
+block	feature	ssh localhost git push -f origin x
+block	feature	su -c "git push -f origin x"
+block	feature	git checkout -Bmain origin/main && git push origin HEAD
+block	feature	gh alias set pm "pr merge --admin"
+block	feature	git send-pack git@github.com:o/r.git main
+block	feature	git -c remote.origin.mirror=yes push origin
+block	feature	git --config-env=remote.origin.mirror=X push origin
+block	feature	git --super-prefix push -f origin x
+# --- second review: must stay allowed
+allow	feature	git push -u origin HEAD
+allow	feature	git stash push -m "wip"
+allow	feature	git push --set-upstream origin fix/x
+allow	feature	git push origin --delete fix/old
+allow	feature	git push origin :fix/old
+allow	feature	git push -o ci.skip origin fix/x
+allow	feature	git commit -m "fix: handle -race flag"
+allow	feature	git commit --fixup=HEAD
+allow	feature	git rebase --exec "make test" origin/main
+allow	feature	git commit -m "Use 2>&1 in docs"
+allow	feature	git -c push.default=current push -u origin HEAD
+allow	feature	git push origin "feature/*"
+allow	main	git checkout main && git pull && git push origin v0.5.0
+allow	feature	git switch -c fix/a origin/main && git commit -m x && git push -u origin fix/a
+allow	feature	gh pr view 26 --comments
+allow	feature	gh pr merge 26 --merge --delete-branch && git checkout main && git pull
+allow	feature	git log --no-walk --format=%H
+allow	feature	git worktree add ../wt -b fix/b origin/main
+# The old hook blocked these, but git or gh rejects them, or (-o HEAD)
+# HEAD is a push option and only x is pushed.
+allow	feature	git --attr-source commit -n -m x
+allow	main	git push -o HEAD origin x
+allow	feature	git push -x:main origin
+allow	feature	git push --x:main origin
+allow	feature	gh 5 pr merge --admin
+# --- known gaps (not run): ANSI-C escapes are not decoded, and a
+# branch-creating checkout clears an earlier checkout of main even when
+# it fails before a ;-separated push. The real HEAD is always checked.
+#	git push origin $'\155ain'
+#	git checkout main; git checkout -b fix/x; git push -u origin HEAD
