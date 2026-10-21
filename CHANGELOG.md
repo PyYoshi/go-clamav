@@ -6,6 +6,23 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The Claude Code git-command guard (`.claude/hooks/guard-bash.sh`) now
+  catches blocked commands written in other forms: git or gh behind a
+  variable assignment, a path, a shell keyword or a wrapper (`env`,
+  `sudo`, `sh -c`, `xargs`, ...), quoted words, short-option clusters
+  (`-nm`, `-uf`), the long-option abbreviations git accepts
+  (`--no-verif`), `@` for HEAD, backslash-continued lines, a redirection
+  such as `2>&1` that hid a push from main, and a push after
+  `git checkout main` in the same command line. It also blocks
+  `git push --all`/`--mirror`, signing and `core.hooksPath` overrides
+  through `--config-env` or `GIT_CONFIG_*` variables, any
+  `git -c commit.gpgsign` value other than true, and
+  `git config --unset commit.gpgsign`. Its comments no longer claim that
+  only false blocks are possible: it remains an advisory layer, and
+  rulesets and CI stay authoritative.
+
 ## [0.4.0] - 2026-10-14
 
 ### Changed
