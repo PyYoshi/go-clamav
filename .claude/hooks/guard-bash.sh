@@ -510,14 +510,13 @@ find_command() {
 scan() {
   local input=$2 t words skip
   on_main=0
-  [ "$1" = joined ] && input=${input//\\$'\n'/ }
-  while IFS= read -r raw_seg; do
+  [ "$1" = joined ] && input=$(printf '%s\n' "$input" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }')
+  while IFS= read -r raw_seg <&3 && IFS= read -r t <&4; do
     # A segment that names neither git, gh nor GIT_CONFIG_ once quotes,
     # backslashes and $ are gone matches no rule; skipping it keeps long
     # heredoc bodies cheap. $ goes too because the words drop $"/$' (gi$"t"
     # runs git). The rules match git, gh and GIT_CONFIG_ case-sensitively,
     # so this filter can be too.
-    t=${raw_seg//[\"\'\\\$]/}
     case "$t" in
     *git* | *gh* | *GIT_CONFIG_*) ;;
     *) continue ;;
@@ -535,6 +534,7 @@ scan() {
         '#'*) break ;;
         esac
       fi
+      if [ "${#t}" -gt 256 ]; then t=$(printf '%s' "$t" | sed -e 's/[$]["]/"/g' -e "s/[$]'/'/g" | tr -d "\"'\\\\"); fi
       t=${t//\$\"/\"}
       t=${t//\$\'/\'}
       t=${t//\"/}
@@ -564,7 +564,7 @@ scan() {
       gh) check_gh "${words[@]:$((i + 1))}" ;;
       esac
     done
-  done < <(printf '%s\n' "$input" | tr '|;&`()' '\n')
+  done 3< <(printf '%s\n' "$input" | tr '|;&`()' '\n') 4< <(printf '%s\n' "$input" | tr '|;&`()' '\n' | tr -d "\"'\\\\\$")
 }
 
 # The awk passes below read one line per record, carry their state across
