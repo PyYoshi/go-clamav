@@ -419,6 +419,10 @@ allow	main	git tag -s v0.5.0 -m "$(printf 'go-clamav v0.5.0')"
 allow	feature	test "$(git rev-parse --abbrev-ref HEAD)" = main || git push origin HEAD
 allow	feature	git commit -m "$(cat <<'EOF'<NL>Handle (nested) parens and it's fine<NL>EOF<NL>)"
 block	feature	git remote add --mi=push bk git@github.com:o/r.git
+# --- the segment prefilter must not skip words that drop $"/$' quoting
+block	feature	gi$"t" push -f origin x
+block	feature	gi$'t' push -f origin x
+block	feature	g$"i"t push -f origin x
 # --- known gaps (not run): ANSI-C escapes are not decoded, and a
 # branch-creating checkout clears an earlier checkout of main even when
 # it fails before a ;-separated push. The real HEAD is always checked.

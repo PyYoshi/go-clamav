@@ -512,10 +512,12 @@ scan() {
   on_main=0
   [ "$1" = joined ] && input=${input//\\$'\n'/ }
   while IFS= read -r raw_seg; do
-    # A segment that names neither git, gh nor GIT_CONFIG_ once quotes and
-    # backslashes are gone matches no rule; skipping it keeps long heredoc
-    # bodies cheap.
-    t=${raw_seg//[\"\'\\]/}
+    # A segment that names neither git, gh nor GIT_CONFIG_ once quotes,
+    # backslashes and $ are gone matches no rule; skipping it keeps long
+    # heredoc bodies cheap. $ goes too because the words drop $"/$' (gi$"t"
+    # runs git). The rules match git, gh and GIT_CONFIG_ case-sensitively,
+    # so this filter can be too.
+    t=${raw_seg//[\"\'\\\$]/}
     case "$t" in
     *git* | *gh* | *GIT_CONFIG_*) ;;
     *) continue ;;
