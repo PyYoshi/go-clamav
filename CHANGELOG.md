@@ -14,6 +14,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
   `make verify` and in the CI `lint` job. A local run without `jq`
   skips it with a warning; in CI a missing `jq` fails the job.
 
+### Changed
+
+- Raise the Go toolchain floor to 1.27.3, which carries the fix for
+  GO-2026-6809 (`crypto/x509`). Modules that depend on go-clamav need
+  `go 1.27.3` or later; older local toolchains fetch it automatically via
+  `GOTOOLCHAIN=auto`.
+
 ### Fixed
 
 - The Claude Code git-command guard (`.claude/hooks/guard-bash.sh`) now
