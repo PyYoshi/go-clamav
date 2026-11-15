@@ -6,6 +6,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the Go toolchain floor to 1.27.4, which carries the fix for
+  GO-2026-6859 (`net/http`). Modules that depend on go-clamav need
+  `go 1.27.4` or later; older local toolchains fetch it automatically via
+  `GOTOOLCHAIN=auto`.
+
 ## [0.4.1] - 2026-10-23
 
 ### Added
